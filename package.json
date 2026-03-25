@@ -1,0 +1,33 @@
+{
+  "name": "wardflow",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "lint": "eslint src --ext .ts,.js --report-unused-disable-directives --max-warnings 0",
+    "lint:fix": "eslint src --ext .ts,.js --fix",
+    "format": "prettier --write \"src/**/*.{ts,js,css,html}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,js,css,html}\"",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "dexie": "^4.0.7",
+    "firebase": "^10.8.0",
+    "lit": "^3.1.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.16",
+    "eslint": "^8.56.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-lit": "^1.11.0",
+    "eslint-plugin-wc": "^2.0.4",
+    "prettier": "^3.2.5",
+    "typescript": "^5.3.3",
+    "typescript-eslint": "^7.0.1",
+    "vite": "^5.1.0",
+    "vite-plugin-pwa": "^0.19.0"
+  }
+}
