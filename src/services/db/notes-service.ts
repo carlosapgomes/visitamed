@@ -5,6 +5,7 @@
 
 import { db } from './dexie-db';
 import { createNote, NOTE_CONSTANTS, type Note } from '@/models/note';
+import { isNoteActive } from '@/utils/note-expiration';
 
 /** ID de usuário placeholder antes de implementar autenticação */
 const LOCAL_USER_ID = 'local-user';
@@ -41,7 +42,7 @@ export async function getAllNotes(): Promise<Note[]> {
   const notes = await db.notes
     .where('userId')
     .equals(LOCAL_USER_ID)
-    .filter((note) => note.expiresAt > now)
+    .filter((note) => isNoteActive(note, now))
     .reverse()
     .sortBy('createdAt');
 
