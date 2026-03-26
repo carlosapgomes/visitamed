@@ -7,8 +7,10 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "lint": "eslint src --ext .ts,.js --report-unused-disable-directives --max-warnings 0",
-    "lint:fix": "eslint src --ext .ts,.js --fix",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint src --max-warnings 0",
+    "lint:fix": "eslint src --fix",
     "format": "prettier --write \"src/**/*.{ts,js,css,html}\"",
     "format:check": "prettier --check \"src/**/*.{ts,js,css,html}\"",
     "typecheck": "tsc --noEmit"
@@ -28,6 +30,7 @@
     "typescript": "^5.3.3",
     "typescript-eslint": "^7.0.1",
     "vite": "^5.1.0",
-    "vite-plugin-pwa": "^0.19.0"
+    "vite-plugin-pwa": "^0.19.0",
+    "vitest": "^4.1.1"
   }
 }
