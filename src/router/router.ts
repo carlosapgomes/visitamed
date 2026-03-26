@@ -3,6 +3,8 @@
  * Router customizado simples para SPA
  */
 
+import { getAuthState } from '@/services/auth/auth-service';
+
 export type RouteParams = Record<string, string>;
 
 export interface Route {
@@ -25,10 +27,25 @@ let currentMatch: RouteMatch | null = null;
  * Configuração de rotas
  */
 export const routes: Route[] = [
-  { path: '/', component: 'dashboard-view' }, // Redireciona para dashboard
-  { path: '/dashboard', component: 'dashboard-view' },
-  { path: '/nova-nota', component: 'new-note-view' },
+  { path: '/', component: 'dashboard-view', guard: requireAuth },
+  { path: '/dashboard', component: 'dashboard-view', guard: requireAuth },
+  { path: '/nova-nota', component: 'new-note-view', guard: requireAuth },
+  { path: '/login', component: 'login-view' },
 ];
+
+/**
+ * Guard que exige autenticação
+ */
+function requireAuth(): boolean {
+  const { user, loading } = getAuthState();
+
+  // Se ainda está carregando, permite (será revalidado depois)
+  if (loading) {
+    return true;
+  }
+
+  return user !== null;
+}
 
 /**
  * Inicializa o router

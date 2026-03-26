@@ -6,9 +6,7 @@
 import { db } from './dexie-db';
 import { createNote, NOTE_CONSTANTS, type Note } from '@/models/note';
 import { isNoteActive } from '@/utils/note-expiration';
-
-/** ID de usuário placeholder antes de implementar autenticação */
-const LOCAL_USER_ID = 'local-user';
+import { getAuthState } from '@/services/auth/auth-service';
 
 export interface CreateNoteInput {
   ward: string;
@@ -18,11 +16,26 @@ export interface CreateNoteInput {
 }
 
 /**
+ * Obtém o ID do usuário atual ou lança erro se não autenticado
+ */
+function requireUserId(): string {
+  const { user } = getAuthState();
+
+  if (!user) {
+    throw new Error('Usuário não autenticado. Faça login para criar notas.');
+  }
+
+  return user.uid;
+}
+
+/**
  * Cria e salva uma nova nota no banco local
  */
 export async function saveNote(input: CreateNoteInput): Promise<Note> {
+  const userId = requireUserId();
+
   const note = createNote({
-    userId: LOCAL_USER_ID,
+    userId,
     ward: input.ward.trim(),
     bed: input.bed.trim(),
     note: input.note.trim(),
@@ -34,14 +47,21 @@ export async function saveNote(input: CreateNoteInput): Promise<Note> {
 }
 
 /**
- * Busca todas as notas do usuário local, não expiradas
+ * Busca todas as notas do usuário atual, não expiradas
  * Ordenadas por createdAt descendente (mais recentes primeiro)
  */
 export async function getAllNotes(): Promise<Note[]> {
+  const { user } = getAuthState();
+
+  // Se não há usuário, retorna lista vazia
+  if (!user) {
+    return [];
+  }
+
   const now = new Date();
   const notes = await db.notes
     .where('userId')
-    .equals(LOCAL_USER_ID)
+    .equals(user.uid)
     .filter((note) => isNoteActive(note, now))
     .reverse()
     .sortBy('createdAt');
