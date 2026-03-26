@@ -18,7 +18,7 @@ export interface RouteMatch {
 
 type RouteChangeCallback = (match: RouteMatch) => void;
 
-const subscribers: Set<RouteChangeCallback> = new Set();
+const subscribers = new Set<RouteChangeCallback>();
 let currentMatch: RouteMatch | null = null;
 
 /**
@@ -35,7 +35,7 @@ export const routes: Route[] = [
  */
 export function initializeRouter(): void {
   window.addEventListener('popstate', handlePopState);
-  handleRouteChange();
+  void handleRouteChange();
 }
 
 /**
@@ -52,7 +52,7 @@ export function navigate(path: string, replace = false): void {
     window.history.pushState({}, '', path);
   }
 
-  handleRouteChange();
+  void handleRouteChange();
 }
 
 /**
@@ -152,7 +152,7 @@ function matchPath(pattern: string, path: string): RouteParams | null {
  * Handler para popstate
  */
 function handlePopState(): void {
-  handleRouteChange();
+  void handleRouteChange();
 }
 
 /**

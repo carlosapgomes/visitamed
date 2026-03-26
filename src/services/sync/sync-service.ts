@@ -27,7 +27,7 @@ let currentStatus: SyncStatus = {
   error: null,
 };
 
-const subscribers: Set<SyncStatusCallback> = new Set();
+const subscribers = new Set<SyncStatusCallback>();
 
 /**
  * Obtém o status atual de sincronização
@@ -83,7 +83,7 @@ export async function syncNow(): Promise<void> {
 
     for (const item of pendingItems) {
       try {
-        await processSyncItem(item);
+        processSyncItem(item);
         await db.syncQueue.delete(item.id);
       } catch (error) {
         await handleSyncError(item, error);
@@ -112,7 +112,7 @@ export async function syncNow(): Promise<void> {
  *
  * TODO: Implementar escrita no Firestore
  */
-async function processSyncItem(_item: SyncQueueItem): Promise<void> {
+function processSyncItem(_item: SyncQueueItem): void {
   // Placeholder - implementar na próxima fase
   console.log('[WardFlow] Processando sync item:', _item.id);
 }

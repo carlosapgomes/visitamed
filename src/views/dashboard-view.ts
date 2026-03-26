@@ -69,7 +69,7 @@ export class DashboardView extends LitElement {
 
   override connectedCallback(): void {
     super.connectedCallback();
-    this.loadNotes();
+    void this.loadNotes();
   }
 
   private async loadNotes(): Promise<void> {
@@ -84,9 +84,9 @@ export class DashboardView extends LitElement {
     }
   }
 
-  private handleFabClick() {
+  private handleFabClick = () => {
     navigate('/nova-nota');
-  }
+  };
 
   private renderEmptyState() {
     return html`

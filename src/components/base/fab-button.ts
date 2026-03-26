@@ -47,9 +47,9 @@ export class FabButton extends LitElement {
     }
   `;
 
-  private handleClick() {
+  private handleClick = () => {
     this.dispatchEvent(new CustomEvent('fab-click', { bubbles: true, composed: true }));
-  }
+  };
 
   override render() {
     return html`

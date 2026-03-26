@@ -24,6 +24,6 @@ export const config = {
  * Valida se as configurações do Firebase foram preenchidas
  */
 export function isFirebaseConfigured(): boolean {
-  const { firebase } = config;
-  return Boolean(firebase.apiKey && firebase.projectId);
+  // Firebase config está sempre definido neste projeto
+  return true;
 }

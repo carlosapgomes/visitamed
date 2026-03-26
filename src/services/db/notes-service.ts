@@ -25,7 +25,7 @@ export async function saveNote(input: CreateNoteInput): Promise<Note> {
     ward: input.ward.trim(),
     bed: input.bed.trim(),
     note: input.note.trim(),
-    reference: input.reference?.trim() || undefined,
+    reference: input.reference?.trim() ?? undefined,
   });
 
   await db.notes.add(note);

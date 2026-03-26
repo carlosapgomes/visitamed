@@ -29,7 +29,7 @@ let currentState: AuthState = {
   error: null,
 };
 
-const subscribers: Set<AuthStateCallback> = new Set();
+const subscribers = new Set<AuthStateCallback>();
 let unsubscribe: Unsubscribe | null = null;
 
 /**

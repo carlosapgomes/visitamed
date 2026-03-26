@@ -61,7 +61,7 @@ export class NoteItem extends LitElement {
     }
   `;
 
-  private handleClick() {
+  private handleClick = () => {
     this.dispatchEvent(
       new CustomEvent('note-click', {
         detail: { note: this.note },
@@ -69,7 +69,7 @@ export class NoteItem extends LitElement {
         composed: true,
       })
     );
-  }
+  };
 
   override render() {
     const { bed, reference, note } = this.note;

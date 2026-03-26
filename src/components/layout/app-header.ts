@@ -71,13 +71,13 @@ export class AppHeader extends LitElement {
     }
   `;
 
-  private handleMenu() {
+  private handleMenu = () => {
     this.dispatchEvent(new CustomEvent('menu-click', { bubbles: true, composed: true }));
-  }
+  };
 
-  private handleUser() {
+  private handleUser = () => {
     this.dispatchEvent(new CustomEvent('user-click', { bubbles: true, composed: true }));
-  }
+  };
 
   override render() {
     return html`

@@ -132,23 +132,23 @@ export class NewNoteView extends LitElement {
     }
   `;
 
-  private handleWardInput(e: Event) {
+  private handleWardInput = (e: Event) => {
     this.ward = (e.target as HTMLInputElement).value;
-  }
+  };
 
-  private handleBedInput(e: Event) {
+  private handleBedInput = (e: Event) => {
     this.bed = (e.target as HTMLInputElement).value;
-  }
+  };
 
-  private handleReferenceInput(e: Event) {
+  private handleReferenceInput = (e: Event) => {
     this.reference = (e.target as HTMLInputElement).value;
-  }
+  };
 
-  private handleNoteInput(e: Event) {
+  private handleNoteInput = (e: Event) => {
     this.note = (e.target as HTMLTextAreaElement).value;
-  }
+  };
 
-  private async handleSave() {
+  private handleSave = async () => {
     const input: CreateNoteInput = {
       ward: this.ward,
       bed: this.bed,
@@ -172,11 +172,11 @@ export class NewNoteView extends LitElement {
     } finally {
       this.saving = false;
     }
-  }
+  };
 
-  private handleCancel() {
+  private handleCancel = () => {
     navigate('/dashboard');
-  }
+  };
 
   override render() {
     const canSave = !this.saving && this.ward && this.bed && this.note;
