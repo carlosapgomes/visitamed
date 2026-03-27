@@ -33,3 +33,5 @@ npm-debug.log*
 
 # PWA
 dev-dist/
+prompts/
+
