@@ -30,13 +30,22 @@ function requireUserId(): string {
 }
 
 /**
+ * Valida que a nota pertence ao usuário atual
+ */
+function validateOwnership(note: Note, userId: string): void {
+  if (note.userId !== userId) {
+    throw new Error('Acesso negado: nota não pertence ao usuário atual');
+  }
+}
+
+/**
  * Enfileira operação de sync para nota dentro de transação local
  */
 async function queueNoteForSyncInTransaction(
   operation: 'create' | 'update' | 'delete',
   note: Note
 ): Promise<void> {
-  const item = createSyncQueueItem(operation, 'note', note.id, note);
+  const item = createSyncQueueItem(note.userId, operation, 'note', note.id, note);
   await db.syncQueue.add(item);
 }
 
@@ -88,9 +97,24 @@ export async function getAllNotes(): Promise<Note[]> {
 
 /**
  * Busca uma nota pelo ID
+ * Valida que a nota pertence ao usuário atual
  */
 export async function getNoteById(noteId: string): Promise<Note | undefined> {
-  return await db.notes.get(noteId);
+  const { user } = getAuthState();
+
+  if (!user) {
+    return undefined;
+  }
+
+  const note = await db.notes.get(noteId);
+
+  if (!note) {
+    return undefined;
+  }
+
+  validateOwnership(note, user.uid);
+
+  return note;
 }
 
 /**
@@ -107,14 +131,19 @@ export function validateNoteInput(input: CreateNoteInput): boolean {
 
 /**
  * Deleta uma nota pelo ID
+ * Valida que a nota pertence ao usuário atual
  */
 export async function deleteNote(noteId: string): Promise<void> {
+  const userId = requireUserId();
+
   await db.transaction('rw', db.notes, db.syncQueue, async () => {
     const note = await db.notes.get(noteId);
 
     if (!note) {
       return;
     }
+
+    validateOwnership(note, userId);
 
     await db.notes.delete(noteId);
     await queueNoteForSyncInTransaction('delete', note);
@@ -123,17 +152,25 @@ export async function deleteNote(noteId: string): Promise<void> {
 
 /**
  * Deleta múltiplas notas por IDs
+ * Valida que todas as notas pertencem ao usuário atual
  */
 export async function deleteNotes(noteIds: string[]): Promise<void> {
   if (noteIds.length === 0) {
     return;
   }
 
+  const userId = requireUserId();
+
   await db.transaction('rw', db.notes, db.syncQueue, async () => {
     const notesToDelete = await db.notes.where('id').anyOf(noteIds).toArray();
 
     if (notesToDelete.length === 0) {
       return;
+    }
+
+    // Valida ownership de todas as notas
+    for (const note of notesToDelete) {
+      validateOwnership(note, userId);
     }
 
     await db.notes.bulkDelete(noteIds);
@@ -146,14 +183,24 @@ export async function deleteNotes(noteIds: string[]): Promise<void> {
 
 /**
  * Atualiza uma nota existente
+ * Valida que a nota pertence ao usuário atual
  */
 export async function updateNote(
   noteId: string,
   updates: Partial<Pick<Note, 'ward' | 'bed' | 'note' | 'reference'>>
 ): Promise<void> {
+  const userId = requireUserId();
   const updatedAt = new Date();
 
   await db.transaction('rw', db.notes, db.syncQueue, async () => {
+    const existingNote = await db.notes.get(noteId);
+
+    if (!existingNote) {
+      throw new Error('Nota não encontrada');
+    }
+
+    validateOwnership(existingNote, userId);
+
     await db.notes.update(noteId, {
       ...updates,
       updatedAt,

@@ -29,6 +29,18 @@ class WardFlowDB extends Dexie {
       // Índices: entityType, entityId, createdAt
       syncQueue: 'id, entityType, entityId, createdAt',
     });
+
+    this.version(2)
+      .stores({
+        notes: 'id, userId, date, ward, syncStatus, expiresAt',
+        settings: 'id, userId',
+        // Adiciona índice userId para isolamento por usuário
+        syncQueue: 'id, userId, entityType, entityId, createdAt',
+      })
+      .upgrade(async (tx) => {
+        // Limpa fila existente (greenfield, sem risco de dados críticos)
+        await tx.table('syncQueue').clear();
+      });
   }
 }
 

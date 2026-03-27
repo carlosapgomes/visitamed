@@ -111,7 +111,7 @@ export async function queueNoteForSync(
   note: Note
 ): Promise<void> {
   const { createSyncQueueItem } = await import('@/models/sync-queue');
-  const item = createSyncQueueItem(operation, 'note', note.id, note);
+  const item = createSyncQueueItem(note.userId, operation, 'note', note.id, note);
   await db.syncQueue.add(item);
   await updatePendingCount();
 }
@@ -149,17 +149,10 @@ export async function syncNow(): Promise<void> {
   let syncError: string | null = null;
 
   try {
-    const pendingItems = (await db.syncQueue.toArray())
-      .filter((item) => shouldProcessItemForCurrentUser(item, user.uid))
-      .sort((a, b) => {
-        const createdAtDiff = a.createdAt.getTime() - b.createdAt.getTime();
-
-        if (createdAtDiff !== 0) {
-          return createdAtDiff;
-        }
-
-        return a.id.localeCompare(b.id);
-      });
+    const pendingItems = await db.syncQueue
+      .where('userId')
+      .equals(user.uid)
+      .sortBy('createdAt');
 
     for (const item of pendingItems) {
       try {
@@ -194,9 +187,16 @@ async function processSyncItem(item: SyncQueueItem, firestore: Firestore): Promi
     throw new Error(`Tipo de entidade não suportado: ${item.entityType}`);
   }
 
-  const notePayload = parseNotePayload(item.payload);
+  let notePayload: Note;
+
+  try {
+    notePayload = JSON.parse(item.payload) as Note;
+  } catch {
+    throw new Error('Payload inválido na fila de sincronização');
+  }
+
   const noteData = notePayload as unknown as DocumentData;
-  const noteRef = doc(firestore, 'users', notePayload.userId, 'notes', item.entityId);
+  const noteRef = doc(firestore, 'users', item.userId, 'notes', item.entityId);
 
   if (item.operation === 'create') {
     await setDoc(noteRef, noteData);
@@ -253,45 +253,6 @@ async function handleSyncError(item: SyncQueueItem, error: unknown): Promise<voi
     lastAttemptAt,
     error: message,
   });
-}
-
-/**
- * Verifica se item deve ser processado para o usuário autenticado atual
- */
-function shouldProcessItemForCurrentUser(item: SyncQueueItem, currentUserId: string): boolean {
-  try {
-    const notePayload = parseNotePayload(item.payload);
-    return notePayload.userId === currentUserId;
-  } catch {
-    // Payload inválido/não parseável deve continuar no fluxo
-    // para entrar em retry e ser removido ao atingir erro terminal.
-    return true;
-  }
-}
-
-/**
- * Faz parse seguro do payload da fila
- */
-function parseNotePayload(payload: string): Note {
-  let parsedPayload: unknown;
-
-  try {
-    parsedPayload = JSON.parse(payload);
-  } catch {
-    throw new Error('Payload inválido na fila de sincronização');
-  }
-
-  if (!parsedPayload || typeof parsedPayload !== 'object') {
-    throw new Error('Payload de nota inválido na fila de sincronização');
-  }
-
-  const notePayload = parsedPayload as Partial<Note>;
-
-  if (typeof notePayload.userId !== 'string' || notePayload.userId.length === 0) {
-    throw new Error('Payload de nota sem userId');
-  }
-
-  return notePayload as Note;
 }
 
 /**

@@ -7,6 +7,9 @@ export interface SyncQueueItem {
   /** ID único do item na fila */
   id: string;
 
+  /** ID do usuário dono do item */
+  userId: string;
+
   /** Tipo de operação */
   operation: SyncOperation;
 
@@ -52,6 +55,7 @@ export const SYNC_QUEUE_CONSTANTS = {
  * Cria um novo item na fila de sincronização
  */
 export function createSyncQueueItem(
+  userId: string,
   operation: SyncOperation,
   entityType: SyncQueueItem['entityType'],
   entityId: string,
@@ -59,6 +63,7 @@ export function createSyncQueueItem(
 ): SyncQueueItem {
   return {
     id: crypto.randomUUID(),
+    userId,
     operation,
     entityType,
     entityId,
