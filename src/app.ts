@@ -7,6 +7,7 @@ import { LitElement, html } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import { initializeRouter, subscribeToRoute, type RouteMatch } from '@/router/router';
 import { initializeAuth, subscribeToAuth, type AuthState } from '@/services/auth/auth-service';
+import { initializeTheme } from '@/services/theme/theme-service';
 
 // Import layout components
 import './components/layout/app-header';
@@ -31,6 +32,9 @@ export class WardFlowApp extends LitElement {
   }
 
   private initApp() {
+    // Inicializa tema (com fallback para preferência do sistema)
+    initializeTheme();
+
     // Inicializa autenticação primeiro
     initializeAuth();
 

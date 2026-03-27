@@ -49,7 +49,7 @@ export class DateGroup extends LitElement {
   override render() {
     return html`
       <section class="card border-0 shadow-sm">
-        <div class="card-header bg-body d-flex align-items-center justify-content-between py-2">
+        <div class="card-header wf-date-header d-flex align-items-center justify-content-between py-2">
           <span class="fw-semibold">${this.formatDateForDisplay(this.date)}</span>
           <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2" @click=${this.handleActionClick} aria-label="Ações da data">
             ⋯

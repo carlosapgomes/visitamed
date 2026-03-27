@@ -7,6 +7,7 @@ import { LitElement, html } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { subscribeToAuth, signOutUser, type AuthState } from '@/services/auth/auth-service';
 import { navigate } from '@/router/router';
+import { getResolvedTheme, toggleTheme, type AppTheme } from '@/services/theme/theme-service';
 
 @customElement('app-header')
 export class AppHeader extends LitElement {
@@ -14,6 +15,7 @@ export class AppHeader extends LitElement {
   @state() private user: AuthState['user'] = null;
   @state() private showMenu = false;
   @state() private showAboutModal = false;
+  @state() private currentTheme: AppTheme = 'light';
 
   private unsubscribe: (() => void) | null = null;
 
@@ -23,6 +25,8 @@ export class AppHeader extends LitElement {
 
   override connectedCallback(): void {
     super.connectedCallback();
+    this.currentTheme = getResolvedTheme();
+
     this.unsubscribe = subscribeToAuth((state: AuthState) => {
       this.user = state.user;
     });
@@ -55,6 +59,11 @@ export class AppHeader extends LitElement {
     } else {
       this.dispatchEvent(new CustomEvent('user-click', { bubbles: true, composed: true }));
     }
+  };
+
+  private handleThemeToggle = (): void => {
+    this.showMenu = false;
+    this.currentTheme = toggleTheme();
   };
 
   private handleAboutOpen = (): void => {
@@ -155,6 +164,9 @@ export class AppHeader extends LitElement {
                       ${this.showMenu
                         ? html`
                             <div class="dropdown-menu show dropdown-menu-end position-absolute top-100 end-0 mt-2">
+                              <button class="dropdown-item" @click=${this.handleThemeToggle}>
+                                ${this.currentTheme === 'dark' ? 'Usar tema claro' : 'Usar tema escuro'}
+                              </button>
                               <button class="dropdown-item" @click=${this.handleAboutOpen}>
                                 Sobre
                               </button>
