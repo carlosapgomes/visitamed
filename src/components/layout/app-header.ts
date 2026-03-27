@@ -13,6 +13,7 @@ export class AppHeader extends LitElement {
   @property({ type: String }) override title = 'WardFlow';
   @state() private user: AuthState['user'] = null;
   @state() private showMenu = false;
+  @state() private showAboutModal = false;
 
   private unsubscribe: (() => void) | null = null;
 
@@ -56,6 +57,15 @@ export class AppHeader extends LitElement {
     }
   };
 
+  private handleAboutOpen = (): void => {
+    this.showMenu = false;
+    this.showAboutModal = true;
+  };
+
+  private handleAboutClose = (): void => {
+    this.showAboutModal = false;
+  };
+
   private handleLogout = async (): Promise<void> => {
     this.showMenu = false;
     try {
@@ -81,6 +91,35 @@ export class AppHeader extends LitElement {
       ${this.user.photoURL
         ? html`<img src=${this.user.photoURL} alt="" referrerpolicy="no-referrer" @error=${this.handleAvatarImageError} />`
         : null}
+    `;
+  }
+
+  private renderAboutModal() {
+    if (!this.showAboutModal) return null;
+
+    const version = __APP_VERSION__;
+
+    return html`
+      <div class="modal-backdrop fade show" @click=${this.handleAboutClose}></div>
+      <div class="modal d-block" tabindex="-1" @click=${this.handleAboutClose}>
+        <div class="modal-dialog modal-dialog-centered modal-sm" @click=${(e: Event) => { e.stopPropagation(); }}>
+          <div class="modal-content border-0 shadow">
+            <div class="modal-body p-4">
+              <h2 class="h6 mb-2">Sobre o WardFlow</h2>
+              <p class="text-secondary small mb-3">
+                PWA para notas clínicas transitórias durante rounds hospitalares.
+              </p>
+              <p class="text-secondary small mb-1">Versão ${version}</p>
+              <p class="text-secondary small mb-3">© ${new Date().getFullYear()} WardFlow</p>
+              <div class="d-grid">
+                <button type="button" class="btn btn-outline-secondary" @click=${this.handleAboutClose}>
+                  Fechar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     `;
   }
 
@@ -116,6 +155,9 @@ export class AppHeader extends LitElement {
                       ${this.showMenu
                         ? html`
                             <div class="dropdown-menu show dropdown-menu-end position-absolute top-100 end-0 mt-2">
+                              <button class="dropdown-item" @click=${this.handleAboutOpen}>
+                                Sobre
+                              </button>
                               <button class="dropdown-item text-danger" @click=${this.handleLogout}>
                                 Sair
                               </button>
@@ -144,6 +186,8 @@ export class AppHeader extends LitElement {
           </div>
         </nav>
       </div>
+
+      ${this.renderAboutModal()}
     `;
   }
 }
