@@ -9,6 +9,16 @@ import { db } from '@/services/db/dexie-db';
 import type { Note } from '@/models/note';
 import type { SyncQueueItem } from '@/models/sync-queue';
 import { getFirebaseFirestore } from '@/services/auth/firebase';
+import { getAuthState } from '@/services/auth/auth-service';
+import {
+  deleteDoc,
+  doc,
+  setDoc,
+  updateDoc,
+  type DocumentData,
+  type Firestore,
+  type UpdateData,
+} from 'firebase/firestore';
 import { SYNC_QUEUE_CONSTANTS } from '@/models/sync-queue';
 
 export interface SyncStatus {
@@ -29,6 +39,11 @@ let currentStatus: SyncStatus = {
 
 const subscribers = new Set<SyncStatusCallback>();
 
+const SYNC_INTERVAL_MS = 60000;
+let isSyncInitialized = false;
+let onlineHandler: (() => void) | null = null;
+let periodicSyncIntervalId: number | null = null;
+
 /**
  * Obtém o status atual de sincronização
  */
@@ -43,6 +58,49 @@ export function subscribeToSync(callback: SyncStatusCallback): () => void {
   subscribers.add(callback);
   callback(currentStatus);
   return () => subscribers.delete(callback);
+}
+
+/**
+ * Inicializa orquestração automática de sync
+ */
+export function initializeSync(): void {
+  if (isSyncInitialized) {
+    return;
+  }
+
+  isSyncInitialized = true;
+
+  // Mantém contador consistente ao iniciar app
+  void updatePendingCount();
+
+  if (typeof window !== 'undefined') {
+    onlineHandler = () => {
+      void syncIfAuthenticated();
+    };
+
+    window.addEventListener('online', onlineHandler);
+
+    periodicSyncIntervalId = window.setInterval(() => {
+      void syncIfAuthenticated();
+    }, SYNC_INTERVAL_MS);
+  }
+}
+
+/**
+ * Cleanup da orquestração automática de sync
+ */
+export function cleanupSync(): void {
+  if (typeof window !== 'undefined' && onlineHandler) {
+    window.removeEventListener('online', onlineHandler);
+    onlineHandler = null;
+  }
+
+  if (typeof window !== 'undefined' && periodicSyncIntervalId !== null) {
+    window.clearInterval(periodicSyncIntervalId);
+    periodicSyncIntervalId = null;
+  }
+
+  isSyncInitialized = false;
 }
 
 /**
@@ -64,6 +122,16 @@ export async function queueNoteForSync(
  * TODO: Implementar lógica completa de sync com Firestore
  */
 export async function syncNow(): Promise<void> {
+  const { user, loading } = getAuthState();
+
+  if (loading || !user) {
+    return;
+  }
+
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    return;
+  }
+
   const firestore = getFirebaseFirestore();
 
   if (!firestore) {
@@ -83,16 +151,18 @@ export async function syncNow(): Promise<void> {
 
     for (const item of pendingItems) {
       try {
-        processSyncItem(item);
+        await processSyncItem(item, firestore);
         await db.syncQueue.delete(item.id);
       } catch (error) {
         await handleSyncError(item, error);
       }
     }
 
+    const pendingCount = await db.syncQueue.count();
+
     currentStatus = {
       isSyncing: false,
-      pendingCount: 0,
+      pendingCount,
       lastSyncAt: new Date(),
       error: null,
     };
@@ -109,12 +179,38 @@ export async function syncNow(): Promise<void> {
 
 /**
  * Processa um item da fila de sincronização
- *
- * TODO: Implementar escrita no Firestore
  */
-function processSyncItem(_item: SyncQueueItem): void {
-  // Placeholder - implementar na próxima fase
-  console.log('[WardFlow] Processando sync item:', _item.id);
+async function processSyncItem(item: SyncQueueItem, firestore: Firestore): Promise<void> {
+  if (item.entityType !== 'note') {
+    throw new Error(`Tipo de entidade não suportado: ${item.entityType}`);
+  }
+
+  const notePayload = parseNotePayload(item.payload);
+  const noteData = notePayload as unknown as DocumentData;
+  const noteRef = doc(firestore, 'users', notePayload.userId, 'notes', item.entityId);
+
+  if (item.operation === 'create') {
+    await setDoc(noteRef, noteData);
+  }
+
+  if (item.operation === 'update') {
+    try {
+      await updateDoc(noteRef, noteData as UpdateData<DocumentData>);
+    } catch {
+      await setDoc(noteRef, noteData, { merge: true });
+    }
+  }
+
+  if (item.operation === 'delete') {
+    await deleteDoc(noteRef);
+  }
+
+  if (item.operation !== 'delete') {
+    await db.notes.update(item.entityId, {
+      syncStatus: 'synced',
+      syncedAt: new Date(),
+    });
+  }
 }
 
 /**
@@ -129,6 +225,13 @@ async function handleSyncError(item: SyncQueueItem, error: unknown): Promise<voi
       error: message,
       lastAttemptAt: new Date(),
     });
+
+    if (item.entityType === 'note') {
+      await db.notes.update(item.entityId, {
+        syncStatus: 'failed',
+      });
+    }
+
     return;
   }
 
@@ -137,6 +240,44 @@ async function handleSyncError(item: SyncQueueItem, error: unknown): Promise<voi
     lastAttemptAt: new Date(),
     error: message,
   });
+}
+
+/**
+ * Faz parse seguro do payload da fila
+ */
+function parseNotePayload(payload: string): Note {
+  let parsedPayload: unknown;
+
+  try {
+    parsedPayload = JSON.parse(payload);
+  } catch {
+    throw new Error('Payload inválido na fila de sincronização');
+  }
+
+  if (!parsedPayload || typeof parsedPayload !== 'object') {
+    throw new Error('Payload de nota inválido na fila de sincronização');
+  }
+
+  const notePayload = parsedPayload as Partial<Note>;
+
+  if (typeof notePayload.userId !== 'string' || notePayload.userId.length === 0) {
+    throw new Error('Payload de nota sem userId');
+  }
+
+  return notePayload as Note;
+}
+
+/**
+ * Tenta sincronizar quando há usuário autenticado
+ */
+async function syncIfAuthenticated(): Promise<void> {
+  const { user, loading } = getAuthState();
+
+  if (loading || !user) {
+    return;
+  }
+
+  await syncNow();
 }
 
 /**

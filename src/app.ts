@@ -8,6 +8,8 @@ import { customElement, state } from 'lit/decorators.js';
 import { initializeRouter, subscribeToRoute, type RouteMatch } from '@/router/router';
 import { initializeAuth, subscribeToAuth, type AuthState } from '@/services/auth/auth-service';
 import { initializeTheme } from '@/services/theme/theme-service';
+import { cleanExpiredNotes } from '@/services/db/dexie-db';
+import { cleanupSync, initializeSync, syncNow } from '@/services/sync/sync-service';
 
 // Import layout components
 import './components/layout/app-header';
@@ -22,6 +24,9 @@ export class WardFlowApp extends LitElement {
   @state() private currentComponent = 'dashboard-view';
   @state() private isAuthLoading = true;
 
+  private unsubscribeAuth: (() => void) | null = null;
+  private unsubscribeRoute: (() => void) | null = null;
+
   protected override createRenderRoot(): HTMLElement {
     return this;
   }
@@ -31,24 +36,46 @@ export class WardFlowApp extends LitElement {
     this.initApp();
   }
 
-  private initApp() {
+  private initApp(): void {
     // Inicializa tema (com fallback para preferência do sistema)
     initializeTheme();
+
+    // Higiene local (não bloqueia UI)
+    void cleanExpiredNotes();
+
+    // Inicializa orquestração de sync automática
+    initializeSync();
 
     // Inicializa autenticação primeiro
     initializeAuth();
 
     // Subscribe ao estado de auth para saber quando terminou de carregar
-    subscribeToAuth((state: AuthState) => {
+    this.unsubscribeAuth = subscribeToAuth((state: AuthState) => {
       this.isAuthLoading = state.loading;
+
+      if (!state.loading && state.user) {
+        void syncNow();
+      }
     });
 
     // Inicializa router
     initializeRouter();
-    subscribeToRoute(this.handleRouteChange.bind(this));
+    this.unsubscribeRoute = subscribeToRoute(this.handleRouteChange.bind(this));
   }
 
-  private handleRouteChange(match: RouteMatch) {
+  override disconnectedCallback(): void {
+    super.disconnectedCallback();
+
+    this.unsubscribeAuth?.();
+    this.unsubscribeAuth = null;
+
+    this.unsubscribeRoute?.();
+    this.unsubscribeRoute = null;
+
+    cleanupSync();
+  }
+
+  private handleRouteChange(match: RouteMatch): void {
     this.currentComponent = match.route.component;
   }
 

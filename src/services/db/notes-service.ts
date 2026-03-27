@@ -7,6 +7,7 @@ import { db } from './dexie-db';
 import { createNote, NOTE_CONSTANTS, type Note } from '@/models/note';
 import { isNoteActive } from '@/utils/note-expiration';
 import { getAuthState } from '@/services/auth/auth-service';
+import { queueNoteForSync } from '@/services/sync/sync-service';
 
 export interface CreateNoteInput {
   ward: string;
@@ -40,9 +41,11 @@ export async function saveNote(input: CreateNoteInput): Promise<Note> {
     bed: input.bed.trim(),
     note: input.note.trim(),
     reference: input.reference?.trim() ?? undefined,
+    syncStatus: 'pending',
   });
 
   await db.notes.add(note);
+  await queueNoteForSync('create', note);
   return note;
 }
 
@@ -92,22 +95,57 @@ export function validateNoteInput(input: CreateNoteInput): boolean {
  * Deleta uma nota pelo ID
  */
 export async function deleteNote(noteId: string): Promise<void> {
+  const note = await db.notes.get(noteId);
+
+  if (!note) {
+    return;
+  }
+
   await db.notes.delete(noteId);
+  await queueNoteForSync('delete', note);
 }
 
 /**
  * Deleta múltiplas notas por IDs
  */
 export async function deleteNotes(noteIds: string[]): Promise<void> {
+  if (noteIds.length === 0) {
+    return;
+  }
+
+  const notesToDelete = await db.notes.where('id').anyOf(noteIds).toArray();
+
+  if (notesToDelete.length === 0) {
+    return;
+  }
+
   await db.notes.bulkDelete(noteIds);
+
+  for (const note of notesToDelete) {
+    await queueNoteForSync('delete', note);
+  }
 }
 
 /**
  * Atualiza uma nota existente
  */
-export async function updateNote(noteId: string, updates: Partial<Pick<Note, 'ward' | 'bed' | 'note' | 'reference'>>): Promise<void> {
+export async function updateNote(
+  noteId: string,
+  updates: Partial<Pick<Note, 'ward' | 'bed' | 'note' | 'reference'>>
+): Promise<void> {
+  const updatedAt = new Date();
+
   await db.notes.update(noteId, {
     ...updates,
-    updatedAt: new Date(),
+    updatedAt,
+    syncStatus: 'pending',
   });
+
+  const updatedNote = await db.notes.get(noteId);
+
+  if (!updatedNote) {
+    return;
+  }
+
+  await queueNoteForSync('update', updatedNote);
 }
