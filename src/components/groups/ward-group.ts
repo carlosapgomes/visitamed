@@ -3,7 +3,7 @@
  * Componente para agrupar notas por ala/unidade
  */
 
-import { LitElement, css, html } from 'lit';
+import { LitElement, html } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import type { Note } from '@/models/note';
 import '../items/note-item';
@@ -13,50 +13,9 @@ export class WardGroup extends LitElement {
   @property({ type: String }) ward = '';
   @property({ type: Array }) notes: Note[] = [];
 
-  static override styles = css`
-    :host {
-      display: block;
-      margin-bottom: var(--space-4);
-    }
-
-    .ward-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: var(--space-2) var(--space-4);
-      font-size: var(--font-sm);
-      font-weight: var(--font-weight-semibold);
-      color: var(--color-muted);
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-    }
-
-    .action-btn {
-      background: none;
-      border: 1px solid transparent;
-      font-size: var(--font-lg);
-      color: var(--color-muted);
-      cursor: pointer;
-      padding: var(--space-1) var(--space-2);
-      border-radius: var(--radius-sm);
-      transition: background-color var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
-    }
-
-    .action-btn:hover {
-      background-color: var(--color-surface);
-      color: var(--color-text);
-      border-color: var(--color-border);
-    }
-
-    .action-btn:active {
-      background-color: var(--color-border);
-    }
-
-    .notes-list {
-      display: flex;
-      flex-direction: column;
-    }
-  `;
+  protected override createRenderRoot(): HTMLElement {
+    return this;
+  }
 
   private handleActionClick = (e: Event) => {
     e.stopPropagation();
@@ -75,15 +34,17 @@ export class WardGroup extends LitElement {
 
   override render() {
     return html`
-      <div class="ward-header">
-        <span>${this.ward}</span>
-        <button class="action-btn" @click=${this.handleActionClick} aria-label="Ações da ala">
-          ⋯
-        </button>
-      </div>
-      <div class="notes-list">
-        ${this.notes.map((note) => html`<note-item .note=${note}></note-item>`)}
-      </div>
+      <section class="${this.notes.length ? '' : 'pb-2'}">
+        <div class="d-flex align-items-center justify-content-between px-3 pt-3 pb-2 border-top">
+          <span class="text-uppercase small fw-semibold text-secondary">${this.ward}</span>
+          <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2" @click=${this.handleActionClick} aria-label="Ações da ala">
+            ⋯
+          </button>
+        </div>
+        <div class="list-group list-group-flush">
+          ${this.notes.map(note => html`<note-item .note=${note}></note-item>`)}
+        </div>
+      </section>
     `;
   }
 }

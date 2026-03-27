@@ -3,17 +3,13 @@
  * Componente principal que gerencia roteamento e views
  */
 
-import { LitElement, css, html } from 'lit';
+import { LitElement, html } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import { initializeRouter, subscribeToRoute, type RouteMatch } from '@/router/router';
 import { initializeAuth, subscribeToAuth, type AuthState } from '@/services/auth/auth-service';
 
 // Import layout components
-import './components/layout/app-shell';
 import './components/layout/app-header';
-
-// Import base components
-import './components/base/fab-button';
 
 // Import views
 import './views/dashboard-view';
@@ -25,33 +21,9 @@ export class WardFlowApp extends LitElement {
   @state() private currentComponent = 'dashboard-view';
   @state() private isAuthLoading = true;
 
-  static override styles = css`
-    :host {
-      display: flex;
-      flex-direction: column;
-      min-height: 100vh;
-      min-height: 100dvh;
-    }
-
-    .app-container {
-      display: flex;
-      flex-direction: column;
-      flex: 1;
-      width: 100%;
-      max-width: 768px;
-      margin: 0 auto;
-    }
-
-    .loading-screen {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      min-height: 100vh;
-      min-height: 100dvh;
-      color: var(--color-muted);
-      font-size: var(--font-md);
-    }
-  `;
+  protected override createRenderRoot(): HTMLElement {
+    return this;
+  }
 
   constructor() {
     super();
@@ -79,7 +51,11 @@ export class WardFlowApp extends LitElement {
   override render() {
     // Mostra loading enquanto verifica auth
     if (this.isAuthLoading) {
-      return html`<div class="loading-screen">Carregando...</div>`;
+      return html`
+        <div class="min-vh-100 d-flex align-items-center justify-content-center text-secondary">
+          Carregando...
+        </div>
+      `;
     }
 
     let view;
@@ -97,7 +73,7 @@ export class WardFlowApp extends LitElement {
         view = html`<dashboard-view></dashboard-view>`;
     }
 
-    return html`<div class="app-container">${view}</div>`;
+    return html`${view}`;
   }
 }
 

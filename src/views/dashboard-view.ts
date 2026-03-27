@@ -3,7 +3,7 @@
  * Tela principal do aplicativo
  */
 
-import { LitElement, css, html } from 'lit';
+import { LitElement, html } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import { navigate } from '@/router/router';
 import { getAllNotes, deleteNotes } from '@/services/db/notes-service';
@@ -50,239 +50,9 @@ export class DashboardView extends LitElement {
   @state() private isNoteActionSheetOpen = false;
   @state() private selectedNote: Note | null = null;
 
-  static override styles = css`
-    :host {
-      display: flex;
-      flex-direction: column;
-      flex: 1;
-    }
-
-    .dashboard-content {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      overflow-y: auto;
-      padding-top: var(--header-height);
-    }
-
-    .notes-list {
-      display: flex;
-      flex-direction: column;
-    }
-
-    .empty-state {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: var(--space-6);
-      padding-bottom: calc(var(--space-6) + 80px);
-    }
-
-    .empty-card {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: var(--space-8) var(--space-6);
-      background-color: var(--color-surface);
-      border: 1px solid var(--color-border);
-      border-radius: var(--radius-lg);
-      text-align: center;
-      max-width: 320px;
-    }
-
-    .empty-icon {
-      width: 64px;
-      height: 64px;
-      color: var(--color-muted);
-      margin-bottom: var(--space-5);
-      opacity: 0.6;
-    }
-
-    .empty-title {
-      font-size: var(--font-lg);
-      font-weight: var(--font-weight-semibold);
-      color: var(--color-text);
-      margin-bottom: var(--space-2);
-    }
-
-    .empty-subtitle {
-      font-size: var(--font-md);
-      color: var(--color-muted);
-      line-height: var(--line-height-relaxed);
-    }
-
-    .empty-hint {
-      display: flex;
-      align-items: center;
-      gap: var(--space-2);
-      margin-top: var(--space-5);
-      padding-top: var(--space-4);
-      border-top: 1px solid var(--color-border);
-      font-size: var(--font-sm);
-      color: var(--color-muted);
-    }
-
-    .empty-hint svg {
-      width: 16px;
-      height: 16px;
-      color: var(--color-primary);
-    }
-
-    .loading {
-      flex: 1;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: var(--color-muted);
-      font-size: var(--font-md);
-    }
-
-    /* Preview styles */
-    .preview-container {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-    }
-
-    .preview-header {
-      padding: var(--space-4);
-      border-bottom: 1px solid var(--color-border);
-    }
-
-    .preview-title {
-      font-size: var(--font-lg);
-      font-weight: var(--font-weight-semibold);
-      color: var(--color-text);
-    }
-
-    .preview-content {
-      flex: 1;
-      padding: var(--space-4);
-      overflow-y: auto;
-    }
-
-    .preview-message {
-      white-space: pre-wrap;
-      font-family: var(--font-family);
-      font-size: var(--font-md);
-      line-height: var(--line-height-relaxed);
-      color: var(--color-text);
-    }
-
-    .preview-actions {
-      display: flex;
-      gap: var(--space-3);
-      padding: var(--space-4);
-      padding-bottom: calc(var(--space-4) + var(--safe-area-inset-bottom));
-      border-top: 1px solid var(--color-border);
-    }
-
-    .btn {
-      flex: 1;
-      padding: var(--space-4);
-      font-size: var(--font-md);
-      font-weight: var(--font-weight-semibold);
-      border-radius: var(--radius-md);
-      border: none;
-      cursor: pointer;
-      transition: background-color var(--transition-fast);
-    }
-
-    .btn-secondary {
-      background-color: var(--color-surface);
-      color: var(--color-text);
-      border: 1px solid var(--color-border);
-    }
-
-    .btn-secondary:hover {
-      background-color: var(--color-border);
-    }
-
-    .btn-primary {
-      background-color: var(--color-primary);
-      color: white;
-    }
-
-    .btn-primary:hover {
-      background-color: var(--color-primary-pressed);
-    }
-
-    /* Toast styles */
-    .toast {
-      position: fixed;
-      bottom: calc(80px + var(--safe-area-inset-bottom));
-      left: 50%;
-      transform: translateX(-50%);
-      background-color: var(--color-text);
-      color: var(--color-bg);
-      padding: var(--space-3) var(--space-5);
-      border-radius: var(--radius-full);
-      font-size: var(--font-sm);
-      font-weight: var(--font-weight-medium);
-      z-index: var(--z-toast);
-      opacity: 0;
-      transition: opacity var(--transition-normal);
-    }
-
-    .toast.visible {
-      opacity: 1;
-    }
-
-    /* Delete confirm dialog */
-    .delete-dialog-backdrop {
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background-color: rgba(0, 0, 0, 0.5);
-      z-index: var(--z-modal);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: var(--space-4);
-    }
-
-    .delete-dialog {
-      background-color: var(--color-bg);
-      border-radius: var(--radius-lg);
-      padding: var(--space-6);
-      max-width: 320px;
-      width: 100%;
-      box-shadow: var(--shadow-lg);
-    }
-
-    .delete-dialog-title {
-      font-size: var(--font-lg);
-      font-weight: var(--font-weight-semibold);
-      color: var(--color-text);
-      margin-bottom: var(--space-2);
-    }
-
-    .delete-dialog-message {
-      font-size: var(--font-md);
-      color: var(--color-muted);
-      margin-bottom: var(--space-5);
-      line-height: var(--line-height-relaxed);
-    }
-
-    .delete-dialog-actions {
-      display: flex;
-      gap: var(--space-3);
-    }
-
-    .btn-danger {
-      background-color: var(--color-danger);
-      color: white;
-      border: none;
-    }
-
-    .btn-danger:hover {
-      background-color: #b91c1c;
-    }
-  `;
+  protected override createRenderRoot(): HTMLElement {
+    return this;
+  }
 
   override connectedCallback(): void {
     super.connectedCallback();
@@ -305,13 +75,21 @@ export class DashboardView extends LitElement {
     navigate('/nova-nota');
   };
 
+  private formatDateForDisplay(date: string): string {
+    const match = date.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!match) return date;
+
+    const [, year, month, day] = match;
+    return `${day}-${month}-${year}`;
+  }
+
   private handleDateAction = (e: CustomEvent<{
     date: string;
     wards: WardGroupData[];
     scopeType: 'date';
   }>) => {
     this.selectedScope = { type: 'date', date: e.detail.date, wards: e.detail.wards };
-    this.selectedTitle = e.detail.date;
+    this.selectedTitle = this.formatDateForDisplay(e.detail.date);
     this.isActionSheetOpen = true;
   };
 
@@ -491,18 +269,15 @@ export class DashboardView extends LitElement {
 
   private renderEmptyState() {
     return html`
-      <div class="empty-state">
-        <div class="empty-card">
-          <svg class="empty-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-          </svg>
-          <p class="empty-title">Nenhuma nota ainda</p>
-          <p class="empty-subtitle">Comece criando uma nova nota para registrar suas observações clínicas</p>
-          <div class="empty-hint">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+      <div class="d-flex align-items-center justify-content-center" style="min-height: 55vh;">
+        <div class="card border-0 shadow-sm text-center w-100" style="max-width: 420px;">
+          <div class="card-body p-4">
+            <svg class="mx-auto text-secondary opacity-75 mb-3" width="56" height="56" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
-            <span>Toque no botão abaixo para adicionar</span>
+            <p class="h6 mb-2">Nenhuma nota ainda</p>
+            <p class="text-secondary mb-3">Comece criando uma nova nota para registrar suas observações clínicas.</p>
+            <div class="small text-secondary border-top pt-3">Toque no botão abaixo para adicionar</div>
           </div>
         </div>
       </div>
@@ -513,9 +288,9 @@ export class DashboardView extends LitElement {
     const groupedNotes = groupNotesByDateAndWard(this.notes);
 
     return html`
-      <div class="notes-list" @note-action=${this.handleNoteAction}>
+      <div class="d-flex flex-column gap-3" @note-action=${this.handleNoteAction}>
         ${groupedNotes.map(
-          (group) => html`
+          group => html`
             <date-group
               .date=${group.date}
               .wards=${group.wards}
@@ -532,13 +307,13 @@ export class DashboardView extends LitElement {
     return html`
       <app-header title="WardFlow"></app-header>
 
-      <div class="dashboard-content">
+      <main class="container-fluid wf-page-container wf-with-header wf-sheet-safe pb-4">
         ${this.isLoading
-          ? html`<div class="loading">Carregando...</div>`
+          ? html`<div class="d-flex align-items-center justify-content-center text-secondary" style="min-height: 50vh;">Carregando...</div>`
           : this.notes.length > 0
             ? this.renderNotesList()
             : this.renderEmptyState()}
-      </div>
+      </main>
 
       <fab-button icon="plus" label="Nova nota" @fab-click=${this.handleFabClick}></fab-button>
     `;
@@ -548,30 +323,34 @@ export class DashboardView extends LitElement {
     return html`
       <app-header title="WardFlow"></app-header>
 
-      <div class="preview-container">
-        <div class="preview-header">
-          <h2 class="preview-title">Pré-visualizar mensagem</h2>
+      <main class="container-fluid wf-page-container wf-with-header pb-4">
+        <div class="card border-0 shadow-sm mb-3">
+          <div class="card-header bg-body fw-semibold">Pré-visualizar mensagem</div>
+          <div class="card-body">
+            <pre class="wf-preview-message">${this.previewMessage}</pre>
+          </div>
         </div>
 
-        <div class="preview-content">
-          <pre class="preview-message">${this.previewMessage}</pre>
-        </div>
-
-        <div class="preview-actions">
-          <button class="btn btn-secondary" @click=${this.handlePreviewClose}>
+        <div class="d-grid gap-2 d-sm-flex justify-content-end">
+          <button type="button" class="btn btn-outline-secondary" @click=${this.handlePreviewClose}>
             Fechar
           </button>
-          <button class="btn btn-primary" @click=${this.handlePreviewCopy}>
+          <button type="button" class="btn btn-primary" @click=${this.handlePreviewCopy}>
             Copiar
           </button>
         </div>
-      </div>
+      </main>
     `;
   }
 
   private renderToast() {
     return html`
-      <div class="toast ${this.showToast ? 'visible' : ''}">
+      <div
+        class="position-fixed start-50 translate-middle-x text-bg-dark rounded-pill px-3 py-2 small shadow ${
+          this.showToast ? '' : 'd-none'
+        }"
+        style="bottom: calc(80px + var(--safe-area-inset-bottom)); z-index: var(--z-toast);"
+      >
         ${this.toastMessage}
       </div>
     `;
@@ -597,9 +376,7 @@ export class DashboardView extends LitElement {
         @sheet-closed=${this.handleNoteActionSheetClosed}
       ></action-sheet>
 
-      ${this.renderToast()}
-
-      ${this.renderDeleteConfirm()}
+      ${this.renderToast()} ${this.renderDeleteConfirm()}
     `;
   }
 
@@ -617,19 +394,22 @@ export class DashboardView extends LitElement {
     }
 
     return html`
-      <div class="delete-dialog-backdrop" @click=${this.handleDeleteCancel}>
-        <div class="delete-dialog" @click=${(e: Event) => { e.stopPropagation(); }}>
-          <h3 class="delete-dialog-title">Excluir notas?</h3>
-          <p class="delete-dialog-message">
-            ${count} nota(s) ${scopeLabel} serão excluídas permanentemente.
-          </p>
-          <div class="delete-dialog-actions">
-            <button class="btn btn-secondary" @click=${this.handleDeleteCancel}>
-              Cancelar
-            </button>
-            <button class="btn btn-danger" @click=${this.handleDeleteConfirm}>
-              Excluir
-            </button>
+      <div class="modal-backdrop fade show"></div>
+      <div class="modal d-block" tabindex="-1" @click=${this.handleDeleteCancel}>
+        <div class="modal-dialog modal-dialog-centered modal-sm" @click=${(e: Event) => { e.stopPropagation(); }}>
+          <div class="modal-content border-0 shadow">
+            <div class="modal-body p-4">
+              <h3 class="h6 mb-2">Excluir notas?</h3>
+              <p class="text-secondary mb-3">${count} nota(s) ${scopeLabel} serão excluídas permanentemente.</p>
+              <div class="d-grid gap-2 d-sm-flex justify-content-end">
+                <button type="button" class="btn btn-outline-secondary" @click=${this.handleDeleteCancel}>
+                  Cancelar
+                </button>
+                <button type="button" class="btn btn-danger" @click=${this.handleDeleteConfirm}>
+                  Excluir
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </div>

@@ -3,7 +3,7 @@
  * Tela para criar ou editar uma nota
  */
 
-import { LitElement, css, html } from 'lit';
+import { LitElement, html } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import { navigate, getCurrentRoute } from '@/router/router';
 import { saveNote, updateNote, getNoteById, validateNoteInput, type CreateNoteInput } from '@/services/db/notes-service';
@@ -24,141 +24,9 @@ export class NewNoteView extends LitElement {
     return this.noteId !== null;
   }
 
-  static override styles = css`
-    :host {
-      display: flex;
-      flex-direction: column;
-      flex: 1;
-    }
-
-    .form-container {
-      flex: 1;
-      padding: var(--space-5);
-      padding-top: calc(var(--header-height) + var(--space-5));
-      display: flex;
-      flex-direction: column;
-      gap: var(--space-5);
-      overflow-y: auto;
-    }
-
-    .form-group {
-      display: flex;
-      flex-direction: column;
-      gap: var(--space-2);
-    }
-
-    label {
-      font-size: var(--font-sm);
-      font-weight: var(--font-weight-medium);
-      color: var(--color-text);
-    }
-
-    input,
-    textarea {
-      padding: var(--space-4);
-      font-size: var(--font-md);
-      font-family: inherit;
-      background-color: var(--color-bg);
-      border: 1px solid var(--color-border);
-      border-radius: var(--radius-md);
-      transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
-    }
-
-    input:focus,
-    textarea:focus {
-      outline: none;
-      border-color: var(--color-primary);
-      box-shadow: 0 0 0 3px var(--color-primary-light);
-    }
-
-    input::placeholder,
-    textarea::placeholder {
-      color: var(--color-muted);
-      opacity: 0.7;
-    }
-
-    textarea {
-      min-height: 160px;
-      resize: vertical;
-      line-height: var(--line-height-relaxed);
-    }
-
-    .char-count {
-      font-size: var(--font-xs);
-      color: var(--color-muted);
-      text-align: right;
-      margin-top: var(--space-1);
-    }
-
-    .actions {
-      display: flex;
-      gap: var(--space-3);
-      padding: var(--space-4) var(--space-5);
-      padding-bottom: calc(var(--space-4) + var(--safe-area-inset-bottom));
-      border-top: 1px solid var(--color-border);
-      background-color: var(--color-bg);
-    }
-
-    .btn {
-      flex: 1;
-      padding: var(--space-4);
-      font-size: var(--font-md);
-      font-weight: var(--font-weight-semibold);
-      font-family: inherit;
-      border-radius: var(--radius-md);
-      cursor: pointer;
-      transition: background-color var(--transition-fast), border-color var(--transition-fast);
-    }
-
-    .btn-secondary {
-      background-color: var(--color-bg);
-      color: var(--color-text);
-      border: 1px solid var(--color-border);
-    }
-
-    .btn-secondary:hover {
-      background-color: var(--color-surface);
-      border-color: var(--color-muted);
-    }
-
-    .btn-secondary:disabled {
-      opacity: 0.6;
-      cursor: not-allowed;
-    }
-
-    .btn-primary {
-      background-color: var(--color-primary);
-      color: white;
-      border: none;
-    }
-
-    .btn-primary:hover {
-      background-color: var(--color-primary-pressed);
-    }
-
-    .btn-primary:disabled {
-      opacity: 0.6;
-      cursor: not-allowed;
-    }
-
-    .error-message {
-      padding: var(--space-3) var(--space-4);
-      font-size: var(--font-sm);
-      color: var(--color-danger);
-      background-color: var(--color-danger-light);
-      border-radius: var(--radius-md);
-      border: 1px solid var(--color-danger);
-    }
-
-    .loading-container {
-      flex: 1;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: var(--color-muted);
-      font-size: var(--font-md);
-    }
-  `;
+  protected override createRenderRoot(): HTMLElement {
+    return this;
+  }
 
   override async connectedCallback(): Promise<void> {
     super.connectedCallback();
@@ -251,72 +119,87 @@ export class NewNoteView extends LitElement {
     if (this.loading) {
       return html`
         <app-header title=${title}></app-header>
-        <div class="loading-container">Carregando...</div>
+        <main class="container-fluid wf-page-container wf-with-header pb-4">
+          <div class="d-flex align-items-center justify-content-center text-secondary" style="min-height: 50vh;">
+            Carregando...
+          </div>
+        </main>
       `;
     }
 
     return html`
       <app-header title=${title}></app-header>
 
-      <div class="form-container">
-        <div class="form-group">
-          <label for="ward">Ala / Setor *</label>
-          <input
-            id="ward"
-            type="text"
-            .value=${this.ward}
-            @input=${this.handleWardInput}
-            placeholder="Ex: UTI, Enfermaria A"
-            autocomplete="off"
-          />
+      <main class="container-fluid wf-page-container wf-with-header pb-4">
+        <div class="card border-0 shadow-sm mb-3">
+          <div class="card-body">
+            <div class="mb-3">
+              <label for="ward" class="form-label">Ala / Setor *</label>
+              <input
+                id="ward"
+                class="form-control"
+                type="text"
+                .value=${this.ward}
+                @input=${this.handleWardInput}
+                placeholder="Ex: UTI, Enfermaria A"
+                autocomplete="off"
+              />
+            </div>
+
+            <div class="mb-3">
+              <label for="bed" class="form-label">Leito *</label>
+              <input
+                id="bed"
+                class="form-control"
+                type="text"
+                .value=${this.bed}
+                @input=${this.handleBedInput}
+                placeholder="Ex: 01, 02A"
+                autocomplete="off"
+              />
+            </div>
+
+            <div class="mb-3">
+              <label for="reference" class="form-label">Referência (opcional)</label>
+              <input
+                id="reference"
+                class="form-control"
+                type="text"
+                .value=${this.reference}
+                @input=${this.handleReferenceInput}
+                placeholder="Ex: AB"
+                maxlength=${NOTE_CONSTANTS.MAX_REFERENCE_LENGTH}
+              />
+            </div>
+
+            <div class="mb-2">
+              <label for="note" class="form-label">Nota *</label>
+              <textarea
+                id="note"
+                class="form-control"
+                .value=${this.note}
+                @input=${this.handleNoteInput}
+                placeholder="Digite a nota clínica..."
+                maxlength=${NOTE_CONSTANTS.MAX_NOTE_LENGTH}
+                rows="6"
+              ></textarea>
+              <div class="form-text text-end">${this.note.length}/${NOTE_CONSTANTS.MAX_NOTE_LENGTH}</div>
+            </div>
+
+            ${this.error ? html`<div class="alert alert-danger py-2 px-3 mb-0 mt-3" role="alert">${this.error}</div>` : null}
+          </div>
         </div>
+      </main>
 
-        <div class="form-group">
-          <label for="bed">Leito *</label>
-          <input
-            id="bed"
-            type="text"
-            .value=${this.bed}
-            @input=${this.handleBedInput}
-            placeholder="Ex: 01, 02A"
-            autocomplete="off"
-          />
+      <div class="wf-action-bar">
+        <div class="container-fluid wf-page-container d-grid gap-2 d-sm-flex justify-content-end">
+          <button type="button" class="btn btn-outline-secondary" @click=${this.handleCancel} ?disabled=${this.saving}>
+            Cancelar
+          </button>
+          <button type="button" class="btn btn-primary" @click=${this.handleSave} ?disabled=${!canSave}>
+            ${saveLabel}
+          </button>
         </div>
-
-        <div class="form-group">
-          <label for="reference">Referência (opcional)</label>
-          <input
-            id="reference"
-            type="text"
-            .value=${this.reference}
-            @input=${this.handleReferenceInput}
-            placeholder="Ex: AB, iniciais"
-            maxlength=${NOTE_CONSTANTS.MAX_REFERENCE_LENGTH}
-          />
-        </div>
-
-        <div class="form-group">
-          <label for="note">Nota *</label>
-          <textarea
-            id="note"
-            .value=${this.note}
-            @input=${this.handleNoteInput}
-            placeholder="Digite a nota clínica..."
-            maxlength=${NOTE_CONSTANTS.MAX_NOTE_LENGTH}
-          ></textarea>
-          <span class="char-count">${this.note.length}/${NOTE_CONSTANTS.MAX_NOTE_LENGTH}</span>
-        </div>
-
-        ${this.error ? html`<div class="error-message">${this.error}</div>` : null}
-      </div>
-
-      <div class="actions">
-        <button class="btn btn-secondary" @click=${this.handleCancel} ?disabled=${this.saving}>
-          Cancelar
-        </button>
-        <button class="btn btn-primary" @click=${this.handleSave} ?disabled=${!canSave}>
-          ${saveLabel}
-        </button>
       </div>
     `;
   }

@@ -3,7 +3,7 @@
  * Componente para agrupar notas por data
  */
 
-import { LitElement, css, html } from 'lit';
+import { LitElement, html } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import type { Note } from '@/models/note';
 import '../groups/ward-group';
@@ -19,50 +19,17 @@ export class DateGroup extends LitElement {
   @property({ type: String }) date = '';
   @property({ type: Array }) wards: WardGroupData[] = [];
 
-  static override styles = css`
-    :host {
-      display: block;
-      margin-bottom: var(--space-6);
-    }
+  protected override createRenderRoot(): HTMLElement {
+    return this;
+  }
 
-    .date-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: var(--space-3) var(--space-4);
-      font-size: var(--font-md);
-      font-weight: var(--font-weight-semibold);
-      color: var(--color-text);
-      background-color: var(--color-surface);
-      border-bottom: 1px solid var(--color-border);
-    }
+  private formatDateForDisplay(date: string): string {
+    const match = date.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!match) return date;
 
-    .action-btn {
-      background: none;
-      border: 1px solid transparent;
-      font-size: var(--font-lg);
-      color: var(--color-muted);
-      cursor: pointer;
-      padding: var(--space-1) var(--space-2);
-      border-radius: var(--radius-sm);
-      transition: background-color var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
-    }
-
-    .action-btn:hover {
-      background-color: var(--color-bg);
-      color: var(--color-text);
-      border-color: var(--color-border);
-    }
-
-    .action-btn:active {
-      background-color: var(--color-border);
-    }
-
-    .wards-container {
-      display: flex;
-      flex-direction: column;
-    }
-  `;
+    const [, year, month, day] = match;
+    return `${day}-${month}-${year}`;
+  }
 
   private handleActionClick = (e: Event) => {
     e.stopPropagation();
@@ -81,18 +48,20 @@ export class DateGroup extends LitElement {
 
   override render() {
     return html`
-      <div class="date-header">
-        <span>${this.date}</span>
-        <button class="action-btn" @click=${this.handleActionClick} aria-label="Ações da data">
-          ⋯
-        </button>
-      </div>
-      <div class="wards-container">
-        ${this.wards.map(
-          (wardGroup) =>
-            html`<ward-group .ward=${wardGroup.ward} .notes=${wardGroup.notes}></ward-group>`
-        )}
-      </div>
+      <section class="card border-0 shadow-sm">
+        <div class="card-header bg-body d-flex align-items-center justify-content-between py-2">
+          <span class="fw-semibold">${this.formatDateForDisplay(this.date)}</span>
+          <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2" @click=${this.handleActionClick} aria-label="Ações da data">
+            ⋯
+          </button>
+        </div>
+        <div class="card-body p-0">
+          ${this.wards.map(
+            wardGroup =>
+              html`<ward-group .ward=${wardGroup.ward} .notes=${wardGroup.notes}></ward-group>`
+          )}
+        </div>
+      </section>
     `;
   }
 }

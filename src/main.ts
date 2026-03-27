@@ -3,8 +3,10 @@
  * Bootstrap da aplicação
  */
 
-// Import global styles
+// Import Bootstrap + global styles
+import 'bootstrap/dist/css/bootstrap.min.css';
 import './styles/globals.css';
+import './styles/bootstrap-theme.css';
 
 // Import main app component
 import './app';

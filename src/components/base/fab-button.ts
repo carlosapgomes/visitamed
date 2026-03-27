@@ -19,18 +19,20 @@ export class FabButton extends LitElement {
     .fab {
       position: fixed;
       bottom: calc(var(--space-4) + var(--safe-area-inset-bottom));
-      right: var(--space-4);
+      right: max(var(--space-4), calc((100vw - var(--wf-max-content, 860px)) / 2 + var(--space-4)));
       display: flex;
       align-items: center;
       justify-content: center;
       width: 56px;
       height: 56px;
-      background-color: var(--color-primary);
+      background-color: var(--bs-primary, var(--color-primary));
       border-radius: var(--radius-full);
       box-shadow: var(--shadow-lg);
       color: white;
       transition: background-color var(--transition-fast), transform var(--transition-fast);
       z-index: var(--z-sticky);
+      border: none;
+      cursor: pointer;
     }
 
     .fab:hover {
@@ -44,13 +46,6 @@ export class FabButton extends LitElement {
     .fab svg {
       width: 24px;
       height: 24px;
-    }
-
-    /* Alinha com o container centralizado no desktop */
-    @media (min-width: 768px) {
-      .fab {
-        right: calc((100% - 768px) / 2 + var(--space-4));
-      }
     }
   `;
 
