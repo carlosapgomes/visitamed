@@ -146,8 +146,20 @@ export async function syncNow(): Promise<void> {
   currentStatus = { ...currentStatus, isSyncing: true, error: null };
   notifySubscribers();
 
+  let syncError: string | null = null;
+
   try {
-    const pendingItems = await db.syncQueue.toArray();
+    const pendingItems = (await db.syncQueue.toArray())
+      .filter((item) => shouldProcessItemForCurrentUser(item, user.uid))
+      .sort((a, b) => {
+        const createdAtDiff = a.createdAt.getTime() - b.createdAt.getTime();
+
+        if (createdAtDiff !== 0) {
+          return createdAtDiff;
+        }
+
+        return a.id.localeCompare(b.id);
+      });
 
     for (const item of pendingItems) {
       try {
@@ -157,22 +169,19 @@ export async function syncNow(): Promise<void> {
         await handleSyncError(item, error);
       }
     }
-
-    const pendingCount = await db.syncQueue.count();
-
-    currentStatus = {
-      isSyncing: false,
-      pendingCount,
-      lastSyncAt: new Date(),
-      error: null,
-    };
   } catch (error) {
-    currentStatus = {
-      ...currentStatus,
-      isSyncing: false,
-      error: error instanceof Error ? error.message : 'Erro na sincronização',
-    };
+    syncError = error instanceof Error ? error.message : 'Erro na sincronização';
   }
+
+  const pendingCount = await db.syncQueue.count();
+
+  currentStatus = {
+    ...currentStatus,
+    isSyncing: false,
+    pendingCount,
+    lastSyncAt: syncError ? currentStatus.lastSyncAt : new Date(),
+    error: syncError,
+  };
 
   notifySubscribers();
 }
@@ -218,12 +227,15 @@ async function processSyncItem(item: SyncQueueItem, firestore: Firestore): Promi
  */
 async function handleSyncError(item: SyncQueueItem, error: unknown): Promise<void> {
   const message = error instanceof Error ? error.message : 'Erro desconhecido';
+  const retryCount = item.retryCount + 1;
+  const lastAttemptAt = new Date();
 
-  if (item.retryCount >= SYNC_QUEUE_CONSTANTS.MAX_RETRIES) {
+  if (retryCount >= SYNC_QUEUE_CONSTANTS.MAX_RETRIES) {
     console.error('[WardFlow] Item excedeu máximo de tentativas:', item.id);
     await db.syncQueue.update(item.id, {
+      retryCount,
       error: message,
-      lastAttemptAt: new Date(),
+      lastAttemptAt,
     });
 
     if (item.entityType === 'note') {
@@ -232,14 +244,29 @@ async function handleSyncError(item: SyncQueueItem, error: unknown): Promise<voi
       });
     }
 
+    await db.syncQueue.delete(item.id);
     return;
   }
 
   await db.syncQueue.update(item.id, {
-    retryCount: item.retryCount + 1,
-    lastAttemptAt: new Date(),
+    retryCount,
+    lastAttemptAt,
     error: message,
   });
+}
+
+/**
+ * Verifica se item deve ser processado para o usuário autenticado atual
+ */
+function shouldProcessItemForCurrentUser(item: SyncQueueItem, currentUserId: string): boolean {
+  try {
+    const notePayload = parseNotePayload(item.payload);
+    return notePayload.userId === currentUserId;
+  } catch {
+    // Payload inválido/não parseável deve continuar no fluxo
+    // para entrar em retry e ser removido ao atingir erro terminal.
+    return true;
+  }
 }
 
 /**
