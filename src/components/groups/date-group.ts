@@ -33,22 +33,25 @@ export class DateGroup extends LitElement {
       font-size: var(--font-md);
       font-weight: var(--font-weight-semibold);
       color: var(--color-text);
+      background-color: var(--color-surface);
+      border-bottom: 1px solid var(--color-border);
     }
 
     .action-btn {
       background: none;
-      border: none;
+      border: 1px solid transparent;
       font-size: var(--font-lg);
       color: var(--color-muted);
       cursor: pointer;
       padding: var(--space-1) var(--space-2);
       border-radius: var(--radius-sm);
-      transition: background-color var(--transition-fast), color var(--transition-fast);
+      transition: background-color var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
     }
 
     .action-btn:hover {
-      background-color: var(--color-surface);
+      background-color: var(--color-bg);
       color: var(--color-text);
+      border-color: var(--color-border);
     }
 
     .action-btn:active {

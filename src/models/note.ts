@@ -28,6 +28,9 @@ export interface Note {
   /** Timestamp de criação */
   createdAt: Date;
 
+  /** Timestamp de atualização */
+  updatedAt?: Date;
+
   /** Timestamp de expiração (padrão: 14 dias) */
   expiresAt: Date;
 

@@ -28,6 +28,12 @@ export class AppHeader extends LitElement {
       border-bottom: 1px solid var(--color-border);
     }
 
+    .header-wrapper {
+      width: 100%;
+      max-width: 768px;
+      margin: 0 auto;
+    }
+
     .header {
       display: flex;
       align-items: center;
@@ -205,49 +211,51 @@ export class AppHeader extends LitElement {
 
   override render() {
     return html`
-      <header class="header">
-        <div class="header-left">
-          <button class="icon-btn" @click=${this.handleMenuClick} aria-label="Menu">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-          </button>
-        </div>
+      <div class="header-wrapper">
+        <header class="header">
+          <div class="header-left">
+            <button class="icon-btn" @click=${this.handleMenuClick} aria-label="Menu">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+          </div>
 
-        <h1 class="header-title">${this.title}</h1>
+          <h1 class="header-title">${this.title}</h1>
 
-        <div class="header-right">
-          ${this.user
-            ? html`
-                <div class="menu-container">
-                  <div class="avatar" @click=${this.handleUserClick}>
-                    ${this.getAvatarContent()}
+          <div class="header-right">
+            ${this.user
+              ? html`
+                  <div class="menu-container">
+                    <div class="avatar" @click=${this.handleUserClick}>
+                      ${this.getAvatarContent()}
+                    </div>
+                    ${this.showMenu
+                      ? html`
+                          <div class="menu">
+                            <button class="menu-item danger" @click=${this.handleLogout}>
+                              Sair
+                            </button>
+                          </div>
+                        `
+                      : null}
                   </div>
-                  ${this.showMenu
-                    ? html`
-                        <div class="menu">
-                          <button class="menu-item danger" @click=${this.handleLogout}>
-                            Sair
-                          </button>
-                        </div>
-                      `
-                    : null}
-                </div>
-              `
-            : html`
-                <button class="icon-btn" @click=${this.handleUserClick} aria-label="Usuário">
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-                    />
-                  </svg>
-                </button>
-              `}
-        </div>
-      </header>
+                `
+              : html`
+                  <button class="icon-btn" @click=${this.handleUserClick} aria-label="Usuário">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                      />
+                    </svg>
+                  </button>
+                `}
+          </div>
+        </header>
+      </div>
     `;
   }
 }

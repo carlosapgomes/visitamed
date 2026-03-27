@@ -6,7 +6,7 @@
 import { LitElement, css, html } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import { navigate } from '@/router/router';
-import { getAllNotes } from '@/services/db/notes-service';
+import { getAllNotes, deleteNotes } from '@/services/db/notes-service';
 import { groupNotesByDateAndWard } from '@/utils/group-notes-by-date-and-ward';
 import { generateMessage, copyToClipboard, type ExportScope } from '@/services/export/message-export';
 import type { Note } from '@/models/note';
@@ -15,11 +15,18 @@ import '../components/base/fab-button';
 import '../components/groups/date-group';
 import '../components/feedback/action-sheet';
 
-/** Ações disponíveis no action sheet */
+/** Ações disponíveis no action sheet de grupo */
 const ACTIONS = [
   { id: 'preview', label: 'Pré-visualizar' },
   { id: 'copy', label: 'Copiar mensagem' },
   { id: 'share', label: 'Compartilhar' },
+  { id: 'delete', label: 'Excluir' },
+];
+
+/** Ações disponíveis no action sheet de nota individual */
+const NOTE_ACTIONS = [
+  { id: 'edit', label: 'Editar' },
+  { id: 'delete', label: 'Excluir' },
 ];
 
 /** Tipo de escopo selecionado */
@@ -39,6 +46,9 @@ export class DashboardView extends LitElement {
   @state() private toastMessage = '';
   @state() private isPreviewOpen = false;
   @state() private previewMessage = '';
+  @state() private isDeleteConfirmOpen = false;
+  @state() private isNoteActionSheetOpen = false;
+  @state() private selectedNote: Note | null = null;
 
   static override styles = css`
     :host {
@@ -52,6 +62,7 @@ export class DashboardView extends LitElement {
       display: flex;
       flex-direction: column;
       overflow-y: auto;
+      padding-top: var(--header-height);
     }
 
     .notes-list {
@@ -66,7 +77,27 @@ export class DashboardView extends LitElement {
       align-items: center;
       justify-content: center;
       padding: var(--space-6);
+      padding-bottom: calc(var(--space-6) + 80px);
+    }
+
+    .empty-card {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: var(--space-8) var(--space-6);
+      background-color: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-lg);
       text-align: center;
+      max-width: 320px;
+    }
+
+    .empty-icon {
+      width: 64px;
+      height: 64px;
+      color: var(--color-muted);
+      margin-bottom: var(--space-5);
+      opacity: 0.6;
     }
 
     .empty-title {
@@ -79,6 +110,24 @@ export class DashboardView extends LitElement {
     .empty-subtitle {
       font-size: var(--font-md);
       color: var(--color-muted);
+      line-height: var(--line-height-relaxed);
+    }
+
+    .empty-hint {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      margin-top: var(--space-5);
+      padding-top: var(--space-4);
+      border-top: 1px solid var(--color-border);
+      font-size: var(--font-sm);
+      color: var(--color-muted);
+    }
+
+    .empty-hint svg {
+      width: 16px;
+      height: 16px;
+      color: var(--color-primary);
     }
 
     .loading {
@@ -144,6 +193,7 @@ export class DashboardView extends LitElement {
     .btn-secondary {
       background-color: var(--color-surface);
       color: var(--color-text);
+      border: 1px solid var(--color-border);
     }
 
     .btn-secondary:hover {
@@ -178,6 +228,59 @@ export class DashboardView extends LitElement {
 
     .toast.visible {
       opacity: 1;
+    }
+
+    /* Delete confirm dialog */
+    .delete-dialog-backdrop {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: rgba(0, 0, 0, 0.5);
+      z-index: var(--z-modal);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: var(--space-4);
+    }
+
+    .delete-dialog {
+      background-color: var(--color-bg);
+      border-radius: var(--radius-lg);
+      padding: var(--space-6);
+      max-width: 320px;
+      width: 100%;
+      box-shadow: var(--shadow-lg);
+    }
+
+    .delete-dialog-title {
+      font-size: var(--font-lg);
+      font-weight: var(--font-weight-semibold);
+      color: var(--color-text);
+      margin-bottom: var(--space-2);
+    }
+
+    .delete-dialog-message {
+      font-size: var(--font-md);
+      color: var(--color-muted);
+      margin-bottom: var(--space-5);
+      line-height: var(--line-height-relaxed);
+    }
+
+    .delete-dialog-actions {
+      display: flex;
+      gap: var(--space-3);
+    }
+
+    .btn-danger {
+      background-color: var(--color-danger);
+      color: white;
+      border: none;
+    }
+
+    .btn-danger:hover {
+      background-color: #b91c1c;
     }
   `;
 
@@ -222,18 +325,45 @@ export class DashboardView extends LitElement {
     this.isActionSheetOpen = true;
   };
 
+  private handleNoteAction = (e: CustomEvent<{ note: Note }>) => {
+    this.selectedNote = e.detail.note;
+    this.selectedTitle = `${e.detail.note.bed}${e.detail.note.reference ? ` (${e.detail.note.reference})` : ''}`;
+    this.isNoteActionSheetOpen = true;
+  };
+
+  private handleNoteActionSelected = (e: CustomEvent<{ actionId: string }>) => {
+    const { actionId } = e.detail;
+
+    if (actionId === 'edit' && this.selectedNote) {
+      navigate(`/editar-nota/${this.selectedNote.id}`);
+      this.isNoteActionSheetOpen = false;
+    } else if (actionId === 'delete' && this.selectedNote) {
+      this.isNoteActionSheetOpen = false;
+      this.isDeleteConfirmOpen = true;
+    }
+  };
+
+  private handleNoteActionSheetClosed = () => {
+    this.isNoteActionSheetOpen = false;
+    this.selectedNote = null;
+  };
+
   private handleActionSelected = async (e: CustomEvent<{ actionId: string }>) => {
     const { actionId } = e.detail;
 
     if (actionId === 'copy' && this.selectedScope) {
       await this.handleCopyMessage();
+      this.isActionSheetOpen = false;
     } else if (actionId === 'preview' && this.selectedScope) {
       this.handlePreviewMessage();
+      this.isActionSheetOpen = false;
     } else if (actionId === 'share' && this.selectedScope) {
       await this.handleShareMessage();
+      this.isActionSheetOpen = false;
+    } else if (actionId === 'delete' && this.selectedScope) {
+      this.isActionSheetOpen = false;
+      this.isDeleteConfirmOpen = true;
     }
-
-    this.isActionSheetOpen = false;
   };
 
   private buildExportScope(): ExportScope | null {
@@ -302,6 +432,50 @@ export class DashboardView extends LitElement {
     this.previewMessage = '';
   };
 
+  private getNoteIdsToDelete(): string[] {
+    // Se há uma nota individual selecionada
+    if (this.selectedNote) {
+      return [this.selectedNote.id];
+    }
+
+    if (!this.selectedScope) return [];
+
+    if (this.selectedScope.type === 'ward') {
+      return this.selectedScope.notes.map(n => n.id);
+    }
+
+    // Para date, coleta todos os IDs de todas as wards
+    return this.selectedScope.wards.flatMap(w => w.notes.map(n => n.id));
+  }
+
+  private handleDeleteConfirm = async (): Promise<void> => {
+    const noteIds = this.getNoteIdsToDelete();
+
+    if (noteIds.length === 0) {
+      this.isDeleteConfirmOpen = false;
+      return;
+    }
+
+    try {
+      await deleteNotes(noteIds);
+      this.showTemporaryToast(`${String(noteIds.length)} nota(s) excluída(s)`);
+      await this.loadNotes();
+    } catch (error) {
+      console.error('Erro ao excluir notas:', error);
+      this.showTemporaryToast('Erro ao excluir notas');
+    } finally {
+      this.isDeleteConfirmOpen = false;
+      this.selectedScope = null;
+      this.selectedNote = null;
+    }
+  };
+
+  private handleDeleteCancel = (): void => {
+    this.isDeleteConfirmOpen = false;
+    this.selectedScope = null;
+    this.selectedNote = null;
+  };
+
   private showTemporaryToast(message: string): void {
     this.toastMessage = message;
     this.showToast = true;
@@ -318,8 +492,19 @@ export class DashboardView extends LitElement {
   private renderEmptyState() {
     return html`
       <div class="empty-state">
-        <p class="empty-title">Nenhuma nota ainda</p>
-        <p class="empty-subtitle">Comece criando uma nova nota</p>
+        <div class="empty-card">
+          <svg class="empty-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+          <p class="empty-title">Nenhuma nota ainda</p>
+          <p class="empty-subtitle">Comece criando uma nova nota para registrar suas observações clínicas</p>
+          <div class="empty-hint">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+            </svg>
+            <span>Toque no botão abaixo para adicionar</span>
+          </div>
+        </div>
       </div>
     `;
   }
@@ -328,7 +513,7 @@ export class DashboardView extends LitElement {
     const groupedNotes = groupNotesByDateAndWard(this.notes);
 
     return html`
-      <div class="notes-list">
+      <div class="notes-list" @note-action=${this.handleNoteAction}>
         ${groupedNotes.map(
           (group) => html`
             <date-group
@@ -404,7 +589,50 @@ export class DashboardView extends LitElement {
         @sheet-closed=${this.handleSheetClosed}
       ></action-sheet>
 
+      <action-sheet
+        .visible=${this.isNoteActionSheetOpen}
+        .title=${this.selectedTitle}
+        .actions=${NOTE_ACTIONS}
+        @action-selected=${this.handleNoteActionSelected}
+        @sheet-closed=${this.handleNoteActionSheetClosed}
+      ></action-sheet>
+
       ${this.renderToast()}
+
+      ${this.renderDeleteConfirm()}
+    `;
+  }
+
+  private renderDeleteConfirm() {
+    if (!this.isDeleteConfirmOpen) return null;
+
+    const count = this.getNoteIdsToDelete().length;
+    let scopeLabel = '';
+    if (this.selectedNote) {
+      scopeLabel = 'desta nota';
+    } else if (this.selectedScope?.type === 'date') {
+      scopeLabel = 'desta data';
+    } else if (this.selectedScope?.type === 'ward') {
+      scopeLabel = 'desta ala';
+    }
+
+    return html`
+      <div class="delete-dialog-backdrop" @click=${this.handleDeleteCancel}>
+        <div class="delete-dialog" @click=${(e: Event) => { e.stopPropagation(); }}>
+          <h3 class="delete-dialog-title">Excluir notas?</h3>
+          <p class="delete-dialog-message">
+            ${count} nota(s) ${scopeLabel} serão excluídas permanentemente.
+          </p>
+          <div class="delete-dialog-actions">
+            <button class="btn btn-secondary" @click=${this.handleDeleteCancel}>
+              Cancelar
+            </button>
+            <button class="btn btn-danger" @click=${this.handleDeleteConfirm}>
+              Excluir
+            </button>
+          </div>
+        </div>
+      </div>
     `;
   }
 }

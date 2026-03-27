@@ -30,6 +30,7 @@ export const routes: Route[] = [
   { path: '/', component: 'dashboard-view', guard: requireAuth },
   { path: '/dashboard', component: 'dashboard-view', guard: requireAuth },
   { path: '/nova-nota', component: 'new-note-view', guard: requireAuth },
+  { path: '/editar-nota/:id', component: 'new-note-view', guard: requireAuth },
   { path: '/login', component: 'login-view' },
 ];
 

@@ -27,9 +27,19 @@ export class WardFlowApp extends LitElement {
 
   static override styles = css`
     :host {
-      display: block;
+      display: flex;
+      flex-direction: column;
       min-height: 100vh;
       min-height: 100dvh;
+    }
+
+    .app-container {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      width: 100%;
+      max-width: 768px;
+      margin: 0 auto;
     }
 
     .loading-screen {
@@ -72,16 +82,22 @@ export class WardFlowApp extends LitElement {
       return html`<div class="loading-screen">Carregando...</div>`;
     }
 
+    let view;
     switch (this.currentComponent) {
       case 'dashboard-view':
-        return html`<dashboard-view></dashboard-view>`;
+        view = html`<dashboard-view></dashboard-view>`;
+        break;
       case 'new-note-view':
-        return html`<new-note-view></new-note-view>`;
+        view = html`<new-note-view></new-note-view>`;
+        break;
       case 'login-view':
-        return html`<login-view></login-view>`;
+        view = html`<login-view></login-view>`;
+        break;
       default:
-        return html`<dashboard-view></dashboard-view>`;
+        view = html`<dashboard-view></dashboard-view>`;
     }
+
+    return html`<div class="app-container">${view}</div>`;
   }
 }
 

@@ -70,6 +70,13 @@ export async function getAllNotes(): Promise<Note[]> {
 }
 
 /**
+ * Busca uma nota pelo ID
+ */
+export async function getNoteById(noteId: string): Promise<Note | undefined> {
+  return await db.notes.get(noteId);
+}
+
+/**
  * Valida se os campos obrigatórios estão preenchidos
  */
 export function validateNoteInput(input: CreateNoteInput): boolean {
@@ -79,4 +86,28 @@ export function validateNoteInput(input: CreateNoteInput): boolean {
     input.note.trim().length > 0 &&
     input.note.length <= NOTE_CONSTANTS.MAX_NOTE_LENGTH
   );
+}
+
+/**
+ * Deleta uma nota pelo ID
+ */
+export async function deleteNote(noteId: string): Promise<void> {
+  await db.notes.delete(noteId);
+}
+
+/**
+ * Deleta múltiplas notas por IDs
+ */
+export async function deleteNotes(noteIds: string[]): Promise<void> {
+  await db.notes.bulkDelete(noteIds);
+}
+
+/**
+ * Atualiza uma nota existente
+ */
+export async function updateNote(noteId: string, updates: Partial<Pick<Note, 'ward' | 'bed' | 'note' | 'reference'>>): Promise<void> {
+  await db.notes.update(noteId, {
+    ...updates,
+    updatedAt: new Date(),
+  });
 }

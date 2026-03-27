@@ -13,7 +13,7 @@ export interface ActionItem {
 
 @customElement('action-sheet')
 export class ActionSheet extends LitElement {
-  @property({ type: Boolean }) visible = false;
+  @property({ type: Boolean, reflect: true }) visible = false;
   @property({ type: String }) override title = '';
   @property({ type: Array }) actions: ActionItem[] = [];
 
@@ -52,6 +52,11 @@ export class ActionSheet extends LitElement {
 
     :host([visible]) .sheet {
       transform: translateY(0);
+    }
+
+    .sheet-inner {
+      max-width: 768px;
+      margin: 0 auto;
     }
 
     .sheet-header {
@@ -110,17 +115,19 @@ export class ActionSheet extends LitElement {
     return html`
       <div class="backdrop" @click=${this.handleBackdropClick}></div>
       <div class="sheet">
-        <div class="sheet-header">
-          <span class="sheet-title">${this.title}</span>
-        </div>
-        <div class="sheet-actions">
-          ${this.actions.map(
-            (action) => html`
-              <button class="action-item" @click=${() => { this.handleActionClick(action.id); }}>
-                ${action.label}
-              </button>
-            `
-          )}
+        <div class="sheet-inner">
+          <div class="sheet-header">
+            <span class="sheet-title">${this.title}</span>
+          </div>
+          <div class="sheet-actions">
+            ${this.actions.map(
+              (action) => html`
+                <button class="action-item" @click=${() => { this.handleActionClick(action.id); }}>
+                  ${action.label}
+                </button>
+              `
+            )}
+          </div>
         </div>
       </div>
     `;

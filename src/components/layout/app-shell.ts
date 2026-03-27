@@ -27,6 +27,9 @@ export class AppShell extends LitElement {
       flex-direction: column;
       padding-top: var(--header-height);
       padding-bottom: calc(var(--safe-area-inset-bottom) + var(--space-4));
+      width: 100%;
+      max-width: 768px;
+      margin: 0 auto;
     }
 
     :host([hasheader='false']) .shell-content {

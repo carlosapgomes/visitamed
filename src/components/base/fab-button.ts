@@ -45,6 +45,13 @@ export class FabButton extends LitElement {
       width: 24px;
       height: 24px;
     }
+
+    /* Alinha com o container centralizado no desktop */
+    @media (min-width: 768px) {
+      .fab {
+        right: calc((100% - 768px) / 2 + var(--space-4));
+      }
+    }
   `;
 
   private handleClick = () => {
