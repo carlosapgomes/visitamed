@@ -1,8 +1,74 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    // ===============================
+    // Notas: hardening com validações
+    // ===============================
+    match /users/{userId}/notes/{noteId} {
+      
+      // Owner check: usuário só pode acessar suas próprias notas
+      allow read: if request.auth != null && request.auth.uid == userId;
+      
+      // Delete: apenas owner
+      allow delete: if request.auth != null && request.auth.uid == userId;
+
+      // Create: validações mínimas de estrutura
+      allow create: if request.auth != null 
+        && request.auth.uid == userId
+        && isValidNoteCreate(request.resource.data, userId, noteId);
+
+      // Update: validações mínimas
+      allow update: if request.auth != null 
+        && request.auth.uid == userId
+        && isValidNoteUpdate(request.resource.data, request.resource.data, userId, noteId);
+    }
+
+    // ===============================
+    // Outras coleções: owner simples
+    // ===============================
     match /users/{userId}/{document=**} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
+  }
+
+  // ===============================
+  // Funções de validação
+  // ===============================
+
+  // Valida criação de nota
+  function isValidNoteCreate(data, pathUserId, noteId) {
+    return data.ward is string
+      && data.bed is string
+      && data.note is string
+      && data.date is string
+      && data.createdAt is timestamp
+      && data.expiresAt is timestamp
+      && data.userId == pathUserId
+      && data.id == noteId
+      && data.ward.size() <= 100
+      && data.bed.size() <= 100
+      && data.note.size() <= 2000
+      && data.date.size() == 10
+      && (data.reference == null || (data.reference is string && data.reference.size() <= 100))
+      && (data.syncStatus == null || data.syncStatus == 'pending')
+      && (data.syncedAt == null || data.syncedAt is timestamp)
+      && (data.updatedAt == null || data.updatedAt is timestamp);
+  }
+
+  // Valida atualização de nota
+  function isValidNoteUpdate(newData, oldData, pathUserId, noteId) {
+    return newData.userId == oldData.userId
+      && newData.userId == pathUserId
+      && newData.id == oldData.id
+      && newData.id == noteId
+      && (newData.ward == null || (newData.ward is string && newData.ward.size() <= 100))
+      && (newData.bed == null || (newData.bed is string && newData.bed.size() <= 100))
+      && (newData.note == null || (newData.note is string && newData.note.size() <= 2000))
+      && (newData.reference == null || (newData.reference is string && newData.reference.size() <= 100))
+      && (newData.date == null || (newData.date is string && newData.date.size() == 10))
+      && newData.createdAt == oldData.createdAt
+      && (newData.expiresAt == null || newData.expiresAt is timestamp)
+      && (newData.updatedAt == null || newData.updatedAt is timestamp);
   }
 }

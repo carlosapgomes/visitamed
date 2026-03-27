@@ -72,6 +72,23 @@ src/
 3. Crie um banco Firestore
 4. Copie as credenciais para `src/config/env.ts`
 
+## Deploy
+
+### Produção
+
+```bash
+npm run build
+firebase deploy
+```
+
+### Regras Firestore
+
+```bash
+firebase deploy --only firestore
+```
+
+Consulte o [Deploy Checklist](docs/deploy-checklist.md) para procedimentos operacionais completos.
+
 ## Licença
 
 MIT
