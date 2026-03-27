@@ -8,6 +8,7 @@ import { customElement, property, state } from 'lit/decorators.js';
 import { subscribeToAuth, signOutUser, type AuthState } from '@/services/auth/auth-service';
 import { navigate } from '@/router/router';
 import { getResolvedTheme, toggleTheme, type AppTheme } from '@/services/theme/theme-service';
+import { config } from '@/config/env';
 
 @customElement('app-header')
 export class AppHeader extends LitElement {
@@ -61,12 +62,14 @@ export class AppHeader extends LitElement {
     }
   };
 
-  private handleThemeToggle = (): void => {
+  private handleThemeToggle = (e?: Event): void => {
+    e?.stopPropagation();
     this.showMenu = false;
     this.currentTheme = toggleTheme();
   };
 
-  private handleAboutOpen = (): void => {
+  private handleAboutOpen = (e?: Event): void => {
+    e?.stopPropagation();
     this.showMenu = false;
     this.showAboutModal = true;
   };
@@ -106,7 +109,7 @@ export class AppHeader extends LitElement {
   private renderAboutModal() {
     if (!this.showAboutModal) return null;
 
-    const version = __APP_VERSION__;
+    const version = config.app.version;
 
     return html`
       <div class="modal-backdrop fade show" @click=${this.handleAboutClose}></div>
