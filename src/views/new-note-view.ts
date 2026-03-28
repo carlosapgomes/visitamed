@@ -165,6 +165,8 @@ export class NewNoteView extends LitElement {
                 @input=${this.handleBedInput}
                 placeholder="Ex: 01, 02A"
                 autocomplete="off"
+                autocapitalize="characters"
+                style="text-transform: uppercase"
               />
             </div>
 
@@ -178,6 +180,8 @@ export class NewNoteView extends LitElement {
                 @input=${this.handleReferenceInput}
                 placeholder="Ex: AB"
                 maxlength=${NOTE_CONSTANTS.MAX_REFERENCE_LENGTH}
+                autocapitalize="characters"
+                style="text-transform: uppercase"
               />
             </div>
 
