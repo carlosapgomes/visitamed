@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "bootstrap": "^5.3.8",
+    "bootstrap-icons": "^1.13.1",
     "dexie": "^4.0.7",
     "firebase": "^10.8.0",
     "lit": "^3.1.2"
