@@ -8,8 +8,6 @@ import { customElement, state } from 'lit/decorators.js';
 import { navigate, getCurrentRoute } from '@/router/router';
 import { saveNote, updateNote, getNoteById, validateNoteInput, getUniqueWards, type CreateNoteInput } from '@/services/db/notes-service';
 import { NOTE_CONSTANTS } from '@/models/note';
-import { startRecording, stopRecording, initRecorder } from '@/services/asr/audio-recorder';
-import type { RecordingState } from '@/services/asr/asr-types';
 
 @customElement('new-note-view')
 export class NewNoteView extends LitElement {
@@ -22,8 +20,6 @@ export class NewNoteView extends LitElement {
   @state() private wardSuggestions: string[] = [];
   @state() private loading = false;
   @state() private error = '';
-  @state() private recordingState: RecordingState = 'idle';
-  @state() private micError = '';
 
   private get isEditMode(): boolean {
     return this.noteId !== null;
@@ -35,9 +31,6 @@ export class NewNoteView extends LitElement {
 
   override async connectedCallback(): Promise<void> {
     super.connectedCallback();
-
-    // Inicializa recorder
-    initRecorder();
 
     // Carrega sugestões de alas
     this.wardSuggestions = await getUniqueWards();
@@ -87,58 +80,6 @@ export class NewNoteView extends LitElement {
   private handleNoteInput = (e: Event) => {
     this.note = (e.target as HTMLTextAreaElement).value;
   };
-
-  private handleRecordToggle = async () => {
-    // Limpa erro anterior
-    this.micError = '';
-
-    if (this.recordingState === 'recording') {
-      // Parar gravação
-      await this.stopRecording();
-    } else if (this.recordingState === 'idle') {
-      // Iniciar gravação
-      await this.startRecording();
-    }
-  };
-
-  private async startRecording(): Promise<void> {
-    try {
-      this.recordingState = 'recording';
-      await startRecording();
-    } catch (err) {
-      this.recordingState = 'error';
-      this.micError = err instanceof Error ? err.message : 'Erro ao iniciar gravação';
-      // Volta para idle após erro
-      setTimeout(() => {
-        this.recordingState = 'idle';
-      }, 2000);
-    }
-  }
-
-  private async stopRecording(): Promise<void> {
-    try {
-      this.recordingState = 'processing';
-      await stopRecording();
-
-      // Stub temporário: simulação de transcrição
-      const transcriptionStub = ' [transcrição simulada]';
-
-      // Anexa ao final do texto atual
-      if (this.note) {
-        this.note = this.note + transcriptionStub;
-      } else {
-        this.note = transcriptionStub;
-      }
-
-      this.recordingState = 'idle';
-    } catch (err) {
-      this.recordingState = 'error';
-      this.micError = err instanceof Error ? err.message : 'Erro ao processar gravação';
-      setTimeout(() => {
-        this.recordingState = 'idle';
-      }, 2000);
-    }
-  }
 
   private handleSave = async () => {
     const input: CreateNoteInput = {
@@ -241,26 +182,13 @@ export class NewNoteView extends LitElement {
             </div>
 
             <div class="mb-2">
-              <label for="note" class="form-label d-flex align-items-center gap-2">
-                Nota *
-                <button
-                  type="button"
-                  class="btn btn-sm ${this.recordingState === 'recording' ? 'btn-danger' : 'btn-outline-secondary'}"
-                  @click=${this.handleRecordToggle}
-                  ?disabled=${this.recordingState === 'processing'}
-                  aria-label=${this.recordingState === 'recording' ? 'Parar gravação' : 'Iniciar gravação'}
-                  title=${this.recordingState === 'recording' ? 'Parar gravação' : 'Gravar nota'}
-                >
-                  <i class="bi ${this.recordingState === 'recording' ? 'bi-stop-fill' : 'bi-mic'}"></i>
-                </button>
-              </label>
-              ${this.recordingState === 'processing' ? html`<div class="text-muted small mb-2">Processando...</div>` : null}
+              <label for="note" class="form-label">Nota *</label>
               <textarea
                 id="note"
                 class="form-control"
                 .value=${this.note}
                 @input=${this.handleNoteInput}
-                placeholder="Digite a nota clínica..."
+                placeholder="Digite a nota clínica ou use o ditado do teclado 🎤"
                 maxlength=${NOTE_CONSTANTS.MAX_NOTE_LENGTH}
                 rows="6"
               ></textarea>
@@ -268,7 +196,6 @@ export class NewNoteView extends LitElement {
             </div>
 
             ${this.error ? html`<div class="alert alert-danger py-2 px-3 mb-0 mt-3" role="alert">${this.error}</div>` : null}
-            ${this.micError ? html`<div class="alert alert-warning py-2 px-3 mb-0 mt-3" role="alert">${this.micError}</div>` : null}
           </div>
         </div>
       </main>
