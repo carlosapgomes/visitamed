@@ -195,6 +195,8 @@ export class NewNoteView extends LitElement {
                 placeholder="Digite ou use o microfone do teclado"
                 maxlength=${NOTE_CONSTANTS.MAX_NOTE_LENGTH}
                 rows="6"
+                autocorrect="on"
+                spellcheck
               ></textarea>
               <div class="form-text text-end">${this.note.length}/${NOTE_CONSTANTS.MAX_NOTE_LENGTH}</div>
             </div>
