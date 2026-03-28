@@ -59,6 +59,17 @@ vi.mock('firebase/firestore', () => ({
 
 import * as syncService from './sync-service';
 import { createSyncQueueItem, type SyncQueueItem } from '@/models/sync-queue';
+import type { WardStat } from '@/models/ward-stat';
+
+// Exportar tipo para testes
+interface FirestoreWardStatData {
+  wardKey: string;
+  wardLabel: string;
+  usageCount: number;
+  lastUsedAt: string;
+  updatedAt: string;
+  userId?: string;
+}
 
 // Mock do window para navigator.onLine
 const mockWindow = {
@@ -356,5 +367,111 @@ describe('sync-service - wardStat sync', () => {
 
   it('deve suportar operação increment no SyncOperation', () => {
     // Este teste apenas verifica que a operação increment é válida
+  });
+});
+
+describe('sync-service - resolveWardStatConflict', () => {
+  const makeLocal = (wardKey: string, usageCount: number, lastUsedAt: Date): Partial<WardStat> => ({
+    id: `user-123:${wardKey}`,
+    userId: 'user-123',
+    wardKey,
+    wardLabel: wardKey,
+    usageCount,
+    lastUsedAt,
+    updatedAt: lastUsedAt,
+  });
+
+  const makeRemote = (wardKey: string, usageCount: number, lastUsedAt: Date): FirestoreWardStatData => ({
+    wardKey,
+    wardLabel: wardKey,
+    usageCount,
+    lastUsedAt: lastUsedAt.toISOString(),
+    updatedAt: lastUsedAt.toISOString(),
+  });
+
+  it('deve usar remoto se não existe local', () => {
+    const remote = makeRemote('UTI', 5, new Date('2024-03-25T12:00:00'));
+    const result = syncService.resolveWardStatConflict(undefined, remote, new Set<string>());
+
+    expect(result.wardKey).toBe('UTI');
+    expect(result.usageCount).toBe(5);
+    expect(result.lastUsedAt).toEqual(new Date('2024-03-25T12:00:00'));
+  });
+
+  it('deve manter local com maior usageCount quando remoto tem menos', () => {
+    const local = makeLocal('UTI', 10, new Date('2024-03-25T10:00:00'));
+    const remote = makeRemote('UTI', 5, new Date('2024-03-25T12:00:00'));
+
+    const result = syncService.resolveWardStatConflict(local as WardStat, remote, new Set<string>());
+
+    expect(result.usageCount).toBe(10);
+  });
+
+  it('deve usar remoto com maior usageCount quando local tem menos', () => {
+    const local = makeLocal('UTI', 3, new Date('2024-03-25T10:00:00'));
+    const remote = makeRemote('UTI', 10, new Date('2024-03-25T12:00:00'));
+
+    const result = syncService.resolveWardStatConflict(local as WardStat, remote, new Set<string>());
+
+    expect(result.usageCount).toBe(10);
+  });
+
+  it('deve usar remoto mais recente em caso de empate de usageCount', () => {
+    const sameTime = new Date('2024-03-25T12:00:00');
+    const local = makeLocal('UTI', 5, new Date('2024-03-25T10:00:00'));
+    const remote = makeRemote('UTI', 5, sameTime);
+
+    const result = syncService.resolveWardStatConflict(local as WardStat, remote, new Set<string>());
+
+    expect(result.lastUsedAt).toEqual(sameTime);
+  });
+
+  it('deve usar local mais recente em caso de empate de usageCount', () => {
+    const sameCount = 5;
+    const localTime = new Date('2024-03-25T14:00:00');
+    const remoteTime = new Date('2024-03-25T12:00:00');
+
+    const local = makeLocal('UTI', sameCount, localTime);
+    const remote = makeRemote('UTI', sameCount, remoteTime);
+
+    const result = syncService.resolveWardStatConflict(local as WardStat, remote, new Set<string>());
+
+    expect(result.lastUsedAt).toEqual(localTime);
+  });
+
+  it('deve preservar usageCount local quando há pendência local', () => {
+    const local = makeLocal('UTI', 8, new Date('2024-03-25T10:00:00'));
+    const remote = makeRemote('UTI', 15, new Date('2024-03-25T12:00:00'));
+    const pendingWardKeys = new Set<string>(['UTI']);
+
+    const result = syncService.resolveWardStatConflict(local as WardStat, remote, pendingWardKeys);
+
+    // Não deve sobrescrever usageCount local quando há pendência
+    expect(result.usageCount).toBe(8);
+    // Mas deve usar lastUsedAt mais recente
+    expect(result.lastUsedAt).toEqual(new Date('2024-03-25T12:00:00'));
+  });
+
+  it('deve usar remoto completo quando há pendência local mas remoto é mais recente em lastUsedAt', () => {
+    const local = makeLocal('UTI', 5, new Date('2024-03-25T08:00:00'));
+    const remote = makeRemote('UTI', 10, new Date('2024-03-25T14:00:00'));
+    const pendingWardKeys = new Set<string>(['UTI']);
+
+    const result = syncService.resolveWardStatConflict(local as WardStat, remote, pendingWardKeys);
+
+    // Preserva usageCount local
+    expect(result.usageCount).toBe(5);
+    // Mas usa lastUsedAt mais recente
+    expect(result.lastUsedAt).toEqual(new Date('2024-03-25T14:00:00'));
+  });
+
+  it('deve usar remoto quando não há pendência local (regra normal)', () => {
+    const local = makeLocal('UTI', 3, new Date('2024-03-25T10:00:00'));
+    const remote = makeRemote('UTI', 10, new Date('2024-03-25T12:00:00'));
+    const pendingWardKeys = new Set<string>(); // Sem pendência
+
+    const result = syncService.resolveWardStatConflict(local as WardStat, remote, pendingWardKeys);
+
+    expect(result.usageCount).toBe(10);
   });
 });
