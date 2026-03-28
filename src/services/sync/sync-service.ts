@@ -21,7 +21,6 @@ import {
   type Firestore,
   type UpdateData,
 } from 'firebase/firestore';
-import type { Timestamp } from 'firebase/firestore';
 import { SYNC_QUEUE_CONSTANTS } from '@/models/sync-queue';
 
 export interface SyncStatus {
@@ -391,6 +390,7 @@ export async function pullRemoteNotes(): Promise<void> {
 
 /**
  * Interface para dados de nota vindos do Firestore
+ * Usa unknown para permitir qualquer formato de timestamp
  */
 interface FirestoreNoteData {
   date: string | null;
@@ -398,9 +398,9 @@ interface FirestoreNoteData {
   bed: string | null;
   reference?: string;
   note: string | null;
-  createdAt: Timestamp;
-  updatedAt?: Timestamp;
-  expiresAt: Timestamp;
+  createdAt: unknown;
+  updatedAt?: unknown;
+  expiresAt: unknown;
 }
 
 /**
