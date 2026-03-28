@@ -70,11 +70,11 @@ export class NewNoteView extends LitElement {
   };
 
   private handleBedInput = (e: Event) => {
-    this.bed = (e.target as HTMLInputElement).value;
+    this.bed = (e.target as HTMLInputElement).value.toUpperCase();
   };
 
   private handleReferenceInput = (e: Event) => {
-    this.reference = (e.target as HTMLInputElement).value;
+    this.reference = (e.target as HTMLInputElement).value.toUpperCase();
   };
 
   private handleNoteInput = (e: Event) => {
