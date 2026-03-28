@@ -5,13 +5,13 @@
 
 export const config = {
   firebase: {
-    apiKey: 'AIzaSyA9ck7Y8FJLqELw6UR1jcmEF7gBF_d6cQs',
-    authDomain: 'wardflow-app.firebaseapp.com',
-    projectId: 'wardflow-app',
-    storageBucket: 'wardflow-app.firebasestorage.app',
-    messagingSenderId: '470246924092',
-    appId: '1:470246924092:web:b1b25df15b77a40ee64839',
-    measurementId: 'G-3F0QSRQ7LF',
+    apiKey: 'AIzaSyBFKwT8khsv2_z_aQxV0p-zY-QT0ybLkLI',
+    authDomain: 'visitamed-36570.firebaseapp.com',
+    projectId: 'visitamed-36570',
+    storageBucket: 'visitamed-36570.firebasestorage.app',
+    messagingSenderId: '393253441468',
+    appId: '1:393253441468:web:dbdfbea755af69f37865b9',
+    measurementId: 'G-VZNYHES84C',
   },
   app: {
     name: 'VisitaMed',
