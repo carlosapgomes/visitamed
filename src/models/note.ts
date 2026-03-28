@@ -1,5 +1,5 @@
 /**
- * WardFlow Note Model
+ * VisitaMed Note Model
  * Modelo para notas transitórias de rounds clínicos
  */
 

@@ -1,5 +1,5 @@
 /**
- * WardFlow Environment Configuration
+ * VisitaMed Environment Configuration
  * Configurações de ambiente e Firebase
  */
 
@@ -14,7 +14,7 @@ export const config = {
     measurementId: 'G-3F0QSRQ7LF',
   },
   app: {
-    name: 'WardFlow',
+    name: 'VisitaMed',
     version: '0.1.0',
     noteExpirationDays: 14,
   },

@@ -1,5 +1,5 @@
 /**
- * WardFlow Sync Status Bar
+ * VisitaMed Sync Status Bar
  * Barra de status de sincronização visível no dashboard
  */
 

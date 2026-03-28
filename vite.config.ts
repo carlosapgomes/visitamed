@@ -8,8 +8,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'icons/*.png'],
       manifest: {
-        name: 'WardFlow',
-        short_name: 'WardFlow',
+        name: 'VisitaMed',
+        short_name: 'VisitaMed',
         description: 'Notas transitórias para rounds clínicos',
         theme_color: '#2563eb',
         background_color: '#ffffff',

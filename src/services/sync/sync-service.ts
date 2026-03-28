@@ -1,5 +1,5 @@
 /**
- * WardFlow Sync Service
+ * VisitaMed Sync Service
  * Serviço de sincronização entre IndexedDB e Firestore
  *
  * TODO: Implementar sincronização completa na próxima fase
@@ -137,7 +137,7 @@ export async function syncNow(): Promise<void> {
   const firestore = getFirebaseFirestore();
 
   if (!firestore) {
-    console.warn('[WardFlow] Firestore não configurado');
+    console.warn('[VisitaMed] Firestore não configurado');
     return;
   }
 
@@ -233,7 +233,7 @@ async function handleSyncError(item: SyncQueueItem, error: unknown): Promise<voi
   const lastAttemptAt = new Date();
 
   if (retryCount >= SYNC_QUEUE_CONSTANTS.MAX_RETRIES) {
-    console.error('[WardFlow] Item excedeu máximo de tentativas:', item.id);
+    console.error('[VisitaMed] Item excedeu máximo de tentativas:', item.id);
     await db.syncQueue.update(item.id, {
       retryCount,
       error: message,
@@ -322,7 +322,7 @@ export async function pullRemoteNotes(): Promise<void> {
   const firestore = getFirebaseFirestore();
 
   if (!firestore) {
-    console.warn('[WardFlow] Firestore não configurado');
+    console.warn('[VisitaMed] Firestore não configurado');
     return;
   }
 
@@ -351,9 +351,9 @@ export async function pullRemoteNotes(): Promise<void> {
         const localVersion = localNote.updatedAt ?? localNote.createdAt;
         const remoteVersion = remoteNote.updatedAt ?? remoteNote.createdAt;
         if (remoteVersion > localVersion) {
-          console.debug(`[WardFlow] Conflito resolvido (remote wins): ${docSnap.id}`);
+          console.debug(`[VisitaMed] Conflito resolvido (remote wins): ${docSnap.id}`);
         } else if (localVersion > remoteVersion) {
-          console.debug(`[WardFlow] Conflito resolvido (local wins): ${docSnap.id}`);
+          console.debug(`[VisitaMed] Conflito resolvido (local wins): ${docSnap.id}`);
         }
       }
 
@@ -379,12 +379,12 @@ export async function pullRemoteNotes(): Promise<void> {
 
     if (orphanedIds.length > 0) {
       await db.notes.bulkDelete(orphanedIds);
-      console.log(`[WardFlow] ${String(orphanedIds.length)} notas órfãs removidas localmente`);
+      console.log(`[VisitaMed] ${String(orphanedIds.length)} notas órfãs removidas localmente`);
     }
 
-    console.log(`[WardFlow] Pull concluído: ${String(notesToUpsert.length)} notas importadas`);
+    console.log(`[VisitaMed] Pull concluído: ${String(notesToUpsert.length)} notas importadas`);
   } catch (error) {
-    console.error('[WardFlow] Erro no pull de notas remotas:', error);
+    console.error('[VisitaMed] Erro no pull de notas remotas:', error);
   }
 }
 
@@ -449,7 +449,7 @@ function convertFirestoreNoteToLocal(
   const expiresAt = convertTimestampToDate(data.expiresAt);
 
   if (!createdAt || !expiresAt) {
-    console.warn(`[WardFlow] Dados de nota inválidos (ID: ${id}), usando valores padrão`);
+    console.warn(`[VisitaMed] Dados de nota inválidos (ID: ${id}), usando valores padrão`);
   }
 
   return {

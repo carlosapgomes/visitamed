@@ -1,5 +1,5 @@
 /**
- * WardFlow Dashboard View
+ * VisitaMed Dashboard View
  * Tela principal do aplicativo
  */
 
@@ -306,7 +306,7 @@ export class DashboardView extends LitElement {
 
   private renderDashboardContent() {
     return html`
-      <app-header title="WardFlow"></app-header>
+      <app-header title="VisitaMed"></app-header>
       <sync-status-bar></sync-status-bar>
 
       <main class="container-fluid wf-page-container wf-with-header-sync wf-sheet-safe pb-4">
@@ -323,7 +323,7 @@ export class DashboardView extends LitElement {
 
   private renderPreview() {
     return html`
-      <app-header title="WardFlow"></app-header>
+      <app-header title="VisitaMed"></app-header>
 
       <main class="container-fluid wf-page-container wf-with-header-sync pb-4">
         <div class="card border-0 shadow-sm mb-3">

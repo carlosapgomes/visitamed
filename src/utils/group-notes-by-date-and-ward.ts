@@ -1,5 +1,5 @@
 /**
- * WardFlow Group Notes Utility
+ * VisitaMed Group Notes Utility
  * Função pura para agrupar notas por data e ala
  */
 

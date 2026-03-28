@@ -1,5 +1,5 @@
 /**
- * WardFlow Settings Model
+ * VisitaMed Settings Model
  * Configurações do usuário
  */
 

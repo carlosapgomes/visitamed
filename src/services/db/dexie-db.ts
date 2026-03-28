@@ -1,5 +1,5 @@
 /**
- * WardFlow Dexie Database
+ * VisitaMed Dexie Database
  * Configuração do IndexedDB com Dexie
  */
 
@@ -11,13 +11,13 @@ import type { SyncQueueItem } from '@/models/sync-queue';
 /**
  * Classe principal do banco de dados
  */
-class WardFlowDB extends Dexie {
+class VisitaMedDB extends Dexie {
   notes!: EntityTable<Note, 'id'>;
   settings!: EntityTable<Settings, 'id'>;
   syncQueue!: EntityTable<SyncQueueItem, 'id'>;
 
   constructor() {
-    super('WardFlowDB');
+    super('VisitaMedDB');
 
     this.version(1).stores({
       // Índices: userId, date, ward, syncStatus, expiresAt
@@ -44,7 +44,7 @@ class WardFlowDB extends Dexie {
   }
 }
 
-export const db = new WardFlowDB();
+export const db = new VisitaMedDB();
 
 /**
  * Limpa dados locais do usuário (notes + syncQueue)

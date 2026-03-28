@@ -1,6 +1,6 @@
 {
-  "name": "WardFlow",
-  "short_name": "WardFlow",
+  "name": "VisitaMed",
+  "short_name": "VisitaMed",
   "description": "Notas transitórias para rounds clínicos",
   "start_url": "/",
   "display": "standalone",

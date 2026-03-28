@@ -1,11 +1,11 @@
 /**
- * WardFlow Theme Service
+ * VisitaMed Theme Service
  * Gerencia preferência e aplicação de tema (claro/escuro)
  */
 
 export type AppTheme = 'light' | 'dark';
 
-const THEME_STORAGE_KEY = 'wardflow-theme';
+const THEME_STORAGE_KEY = 'visitamed-theme';
 
 function getSystemTheme(): AppTheme {
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';

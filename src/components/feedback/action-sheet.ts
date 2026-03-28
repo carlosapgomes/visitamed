@@ -1,5 +1,5 @@
 /**
- * WardFlow Action Sheet
+ * VisitaMed Action Sheet
  * Bottom sheet simples para ações contextuais
  */
 

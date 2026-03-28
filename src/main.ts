@@ -1,5 +1,5 @@
 /**
- * WardFlow - Main Entry Point
+ * VisitaMed - Main Entry Point
  * Bootstrap da aplicação
  */
 

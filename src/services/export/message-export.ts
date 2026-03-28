@@ -1,5 +1,5 @@
 /**
- * WardFlow Message Export Service
+ * VisitaMed Message Export Service
  * Serviço de exportação de notas para formato de mensagem
  */
 

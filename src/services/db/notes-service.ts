@@ -1,5 +1,5 @@
 /**
- * WardFlow Notes Service
+ * VisitaMed Notes Service
  * Serviço de persistência de notas
  */
 

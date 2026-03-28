@@ -1,5 +1,5 @@
 /**
- * WardFlow Auth Service
+ * VisitaMed Auth Service
  * Serviço de autenticação com Firebase (Google Login)
  */
 

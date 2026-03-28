@@ -1,5 +1,5 @@
 /**
- * WardFlow Login View
+ * VisitaMed Login View
  * Tela de login com Google
  */
 
@@ -57,7 +57,7 @@ export class LoginView extends LitElement {
         <div class="w-100" style="max-width: 420px;">
           <div class="card border-0 shadow-sm w-100">
             <div class="card-body p-4 p-sm-5 text-center">
-              <h1 class="h3 text-primary mb-2">WardFlow</h1>
+              <h1 class="h3 text-primary mb-2">VisitaMed</h1>
               <p class="text-secondary mb-4">Notas clínicas para rounds hospitalares</p>
 
               <button class="btn btn-outline-secondary w-100 d-flex align-items-center justify-content-center gap-2" @click=${this.handleLogin} ?disabled=${this.isLoading}>
@@ -74,7 +74,7 @@ export class LoginView extends LitElement {
             </div>
           </div>
 
-          <p class="text-secondary small text-center mt-3 mb-0">© ${currentYear} WardFlow</p>
+          <p class="text-secondary small text-center mt-3 mb-0">© ${currentYear} VisitaMed</p>
         </div>
       </main>
     `;

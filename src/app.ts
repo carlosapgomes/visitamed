@@ -1,5 +1,5 @@
 /**
- * WardFlow App
+ * VisitaMed App
  * Componente principal que gerencia roteamento e views
  */
 
@@ -19,8 +19,8 @@ import './views/dashboard-view';
 import './views/new-note-view';
 import './views/login-view';
 
-@customElement('wardflow-app')
-export class WardFlowApp extends LitElement {
+@customElement('visitamed-app')
+export class VisitaMedApp extends LitElement {
   @state() private currentComponent = 'dashboard-view';
   @state() private isAuthLoading = true;
 
@@ -148,6 +148,6 @@ export class WardFlowApp extends LitElement {
 
 declare global {
   interface HTMLElementTagNameMap {
-    'wardflow-app': WardFlowApp;
+    'visitamed-app': VisitaMedApp;
   }
 }

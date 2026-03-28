@@ -1,5 +1,5 @@
 /**
- * WardFlow App Shell
+ * VisitaMed App Shell
  * Container principal da aplicação
  */
 

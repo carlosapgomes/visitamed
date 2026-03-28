@@ -1,5 +1,5 @@
 /**
- * WardFlow Note Expiration Utility
+ * VisitaMed Note Expiration Utility
  * Funções puras para verificar expiração de notas
  */
 

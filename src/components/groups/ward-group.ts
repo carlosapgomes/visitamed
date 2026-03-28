@@ -1,5 +1,5 @@
 /**
- * WardFlow Ward Group
+ * VisitaMed Ward Group
  * Componente para agrupar notas por ala/unidade
  */
 

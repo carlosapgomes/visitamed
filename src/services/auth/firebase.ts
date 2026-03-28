@@ -1,5 +1,5 @@
 /**
- * WardFlow Firebase Configuration
+ * VisitaMed Firebase Configuration
  * Inicialização do Firebase App
  */
 
@@ -17,7 +17,7 @@ let firestore: Firestore | null = null;
  */
 export function initializeFirebase(): FirebaseApp | null {
   if (!isFirebaseConfigured()) {
-    console.warn('[WardFlow] Firebase não configurado. Configure as credenciais em src/config/env.ts');
+    console.warn('[VisitaMed] Firebase não configurado. Configure as credenciais em src/config/env.ts');
     return null;
   }
 

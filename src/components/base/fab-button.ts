@@ -1,5 +1,5 @@
 /**
- * WardFlow FAB Button
+ * VisitaMed FAB Button
  * Floating Action Button para ações principais
  */
 

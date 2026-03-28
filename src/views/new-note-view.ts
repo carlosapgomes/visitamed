@@ -1,5 +1,5 @@
 /**
- * WardFlow New/Edit Note View
+ * VisitaMed New/Edit Note View
  * Tela para criar ou editar uma nota
  */
 

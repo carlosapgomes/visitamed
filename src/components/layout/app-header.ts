@@ -1,5 +1,5 @@
 /**
- * WardFlow App Header
+ * VisitaMed App Header
  * Cabeçalho da aplicação com menu e usuário
  */
 
@@ -12,7 +12,7 @@ import { config } from '@/config/env';
 
 @customElement('app-header')
 export class AppHeader extends LitElement {
-  @property({ type: String }) override title = 'WardFlow';
+  @property({ type: String }) override title = 'VisitaMed';
   @state() private user: AuthState['user'] = null;
   @state() private showMenu = false;
   @state() private showAboutModal = false;
@@ -117,12 +117,12 @@ export class AppHeader extends LitElement {
         <div class="modal-dialog modal-dialog-centered modal-sm" @click=${(e: Event) => { e.stopPropagation(); }}>
           <div class="modal-content border-0 shadow">
             <div class="modal-body p-4">
-              <h2 class="h6 mb-2">Sobre o WardFlow</h2>
+              <h2 class="h6 mb-2">Sobre o VisitaMed</h2>
               <p class="text-secondary small mb-3">
                 PWA para notas clínicas transitórias durante rounds hospitalares.
               </p>
               <p class="text-secondary small mb-1">Versão ${version}</p>
-              <p class="text-secondary small mb-3">© ${new Date().getFullYear()} WardFlow</p>
+              <p class="text-secondary small mb-3">© ${new Date().getFullYear()} VisitaMed</p>
               <div class="d-grid">
                 <button type="button" class="btn btn-outline-secondary" @click=${this.handleAboutClose}>
                   Fechar
@@ -142,12 +142,12 @@ export class AppHeader extends LitElement {
           <div class="container-fluid wf-page-container px-3">
             <div class="d-flex align-items-center justify-content-between w-100">
               <div class="wf-header-slot">
-                <span class="wf-brand text-primary" aria-label="WardFlow">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="32" height="24" viewBox="0 0 32 24" fill="none" role="img">
-                    <path d="M2 3L5.4 21L9.4 9.8L13.4 21L16.8 3" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/>
-                    <path d="M21 3V21" stroke="currentColor" stroke-width="3.4" stroke-linecap="round"/>
-                    <path d="M21 3H30" stroke="currentColor" stroke-width="3.4" stroke-linecap="round"/>
-                    <path d="M21 11.5H27.5" stroke="currentColor" stroke-width="3.4" stroke-linecap="round"/>
+                <span class="wf-brand text-primary" aria-label="VisitaMed">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="36" height="24" viewBox="0 0 36 24" fill="none" role="img">
+                    <!-- V -->
+                    <path d="M2 4L8 20L14 4" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+                    <!-- M -->
+                    <path d="M18 20V4L26 20L34 4V20" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
                   </svg>
                 </span>
               </div>

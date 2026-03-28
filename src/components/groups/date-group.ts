@@ -1,5 +1,5 @@
 /**
- * WardFlow Date Group
+ * VisitaMed Date Group
  * Componente para agrupar notas por data
  */
 

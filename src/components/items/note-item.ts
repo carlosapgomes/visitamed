@@ -1,5 +1,5 @@
 /**
- * WardFlow Note Item
+ * VisitaMed Note Item
  * Componente para exibir uma nota individual em formato compacto
  */
 

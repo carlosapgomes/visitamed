@@ -1,5 +1,5 @@
 /**
- * WardFlow Sync Queue Model
+ * VisitaMed Sync Queue Model
  * Fila de sincronização para operações offline
  */
 
