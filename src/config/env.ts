@@ -6,7 +6,7 @@
 export const config = {
   firebase: {
     apiKey: 'AIzaSyBFKwT8khsv2_z_aQxV0p-zY-QT0ybLkLI',
-    authDomain: 'visitamed-36570.firebaseapp.com',
+    authDomain: 'visita.med.br',
     projectId: 'visitamed-36570',
     storageBucket: 'visitamed-36570.firebasestorage.app',
     messagingSenderId: '393253441468',
