@@ -15,6 +15,19 @@ interface BeforeInstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
 }
 
+let cachedInstallPrompt: BeforeInstallPromptEvent | null = null;
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('beforeinstallprompt', (event: Event) => {
+    event.preventDefault();
+    cachedInstallPrompt = event as BeforeInstallPromptEvent;
+  });
+
+  window.addEventListener('appinstalled', () => {
+    cachedInstallPrompt = null;
+  });
+}
+
 @customElement('app-header')
 export class AppHeader extends LitElement {
   @property({ type: String }) override title = 'VisitaMed';
@@ -22,9 +35,11 @@ export class AppHeader extends LitElement {
   @state() private showMenu = false;
   @state() private showAboutModal = false;
   @state() private showInstallHelpModal = false;
+  @state() private showAndroidInstallHelpModal = false;
   @state() private currentTheme: AppTheme = 'light';
   @state() private canInstallApp = false;
   @state() private canShowIosInstallHelp = false;
+  @state() private canShowAndroidInstallHelp = false;
 
   private unsubscribe: (() => void) | null = null;
   private deferredInstallPrompt: BeforeInstallPromptEvent | null = null;
@@ -45,6 +60,7 @@ export class AppHeader extends LitElement {
     document.addEventListener('click', this.handleOutsideClick);
 
     // Detecta quando o app pode ser instalado (Android/Chrome)
+    this.deferredInstallPrompt = cachedInstallPrompt;
     window.addEventListener('beforeinstallprompt', this.handleBeforeInstallPrompt);
     window.addEventListener('appinstalled', this.handleAppInstalled);
     this.updateInstallOptions();
@@ -110,18 +126,22 @@ export class AppHeader extends LitElement {
   private updateInstallOptions(): void {
     const installed = this.isInstalled();
     const iosDevice = this.isIosDevice();
+    const nonIosDevice = !iosDevice;
 
-    this.canInstallApp = !installed && !iosDevice && this.deferredInstallPrompt !== null;
+    this.canInstallApp = !installed && nonIosDevice && this.deferredInstallPrompt !== null;
     this.canShowIosInstallHelp = !installed && iosDevice;
+    this.canShowAndroidInstallHelp = !installed && nonIosDevice && this.deferredInstallPrompt === null;
   }
 
   private handleBeforeInstallPrompt = (event: Event): void => {
     event.preventDefault();
-    this.deferredInstallPrompt = event as BeforeInstallPromptEvent;
+    cachedInstallPrompt = event as BeforeInstallPromptEvent;
+    this.deferredInstallPrompt = cachedInstallPrompt;
     this.updateInstallOptions();
   };
 
   private handleAppInstalled = (): void => {
+    cachedInstallPrompt = null;
     this.deferredInstallPrompt = null;
     this.updateInstallOptions();
   };
@@ -134,6 +154,7 @@ export class AppHeader extends LitElement {
 
     const installEvent = this.deferredInstallPrompt;
     this.deferredInstallPrompt = null;
+    cachedInstallPrompt = null;
 
     try {
       await installEvent.prompt();
@@ -153,6 +174,16 @@ export class AppHeader extends LitElement {
 
   private handleInstallHelpClose = (): void => {
     this.showInstallHelpModal = false;
+  };
+
+  private handleAndroidInstallHelpOpen = (e?: Event): void => {
+    e?.stopPropagation();
+    this.showMenu = false;
+    this.showAndroidInstallHelpModal = true;
+  };
+
+  private handleAndroidInstallHelpClose = (): void => {
+    this.showAndroidInstallHelpModal = false;
   };
 
   private handleLogout = async (): Promise<void> => {
@@ -239,6 +270,33 @@ export class AppHeader extends LitElement {
     `;
   }
 
+  private renderAndroidInstallHelpModal() {
+    if (!this.showAndroidInstallHelpModal) return null;
+
+    return html`
+      <div class="modal-backdrop fade show" @click=${this.handleAndroidInstallHelpClose}></div>
+      <div class="modal d-block" tabindex="-1" @click=${this.handleAndroidInstallHelpClose}>
+        <div class="modal-dialog modal-dialog-centered modal-sm" @click=${(e: Event) => { e.stopPropagation(); }}>
+          <div class="modal-content border-0 shadow">
+            <div class="modal-body p-4">
+              <h2 class="h6 mb-2">Instalar no Android</h2>
+              <ol class="small text-secondary ps-3 mb-3">
+                <li>Toque no menu do navegador (⋮).</li>
+                <li>Selecione “Instalar app” ou “Adicionar à tela inicial”.</li>
+                <li>Confirme em “Instalar”/“Adicionar”.</li>
+              </ol>
+              <div class="d-grid">
+                <button type="button" class="btn btn-outline-secondary" @click=${this.handleAndroidInstallHelpClose}>
+                  Entendi
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
   override render() {
     return html`
       <div class="wf-app-header fixed-top border-bottom">
@@ -291,6 +349,13 @@ export class AppHeader extends LitElement {
                                     </button>
                                   `
                                 : null}
+                              ${this.canShowAndroidInstallHelp
+                                ? html`
+                                    <button class="dropdown-item" @click=${this.handleAndroidInstallHelpOpen}>
+                                      Como instalar no Android
+                                    </button>
+                                  `
+                                : null}
                               <button class="dropdown-item text-danger" @click=${this.handleLogout}>
                                 Sair
                               </button>
@@ -322,6 +387,7 @@ export class AppHeader extends LitElement {
 
       ${this.renderAboutModal()}
       ${this.renderInstallHelpModal()}
+      ${this.renderAndroidInstallHelpModal()}
     `;
   }
 }
