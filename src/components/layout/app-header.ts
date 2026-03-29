@@ -233,7 +233,7 @@ export class AppHeader extends LitElement {
             <div class="modal-body p-4">
               <h2 class="h6 mb-2">Sobre o VisitaMed</h2>
               <p class="text-secondary small mb-3">
-                PWA para notas clínicas transitórias durante rounds hospitalares.
+                App simples para anotações rápidas durante a visita.
               </p>
               <p class="text-secondary small mb-1">Versão ${version}</p>
               <p class="text-secondary small mb-3">© ${new Date().getFullYear()} VisitaMed</p>
