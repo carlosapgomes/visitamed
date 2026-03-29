@@ -9,7 +9,14 @@ import { initializeRouter, subscribeToRoute, getCurrentRoute, navigate, type Rou
 import { initializeAuth, subscribeToAuth, type AuthState } from '@/services/auth/auth-service';
 import { initializeTheme } from '@/services/theme/theme-service';
 import { cleanExpiredNotes } from '@/services/db/dexie-db';
-import { cleanupSync, initializeSync, pullRemoteNotes, pullRemoteWardStats, syncNow } from '@/services/sync/sync-service';
+import {
+  cleanupSync,
+  initializeSync,
+  pullRemoteNotes,
+  pullRemoteSettings,
+  pullRemoteWardStats,
+  syncNow,
+} from '@/services/sync/sync-service';
 
 // Import layout components
 import './components/layout/app-header';
@@ -116,6 +123,7 @@ export class VisitaMedApp extends LitElement {
     await syncNow();
     await pullRemoteNotes();
     await pullRemoteWardStats();
+    await pullRemoteSettings();
   }
 
   override render() {
