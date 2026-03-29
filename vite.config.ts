@@ -8,14 +8,18 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon*.ico', 'favicon*.png', 'favicon*.svg', 'manifest-dark.webmanifest', 'icons/*.png'],
       manifest: {
+        id: '/',
         name: 'VisitaMed',
         short_name: 'VisitaMed',
         description: 'Notas transitórias para rounds clínicos',
+        lang: 'pt-BR',
         theme_color: '#2563eb',
         background_color: '#ffffff',
         display: 'standalone',
         orientation: 'portrait',
         start_url: '/',
+        scope: '/',
+        prefer_related_applications: false,
         icons: [
           {
             src: '/icons/icon-192.png',
