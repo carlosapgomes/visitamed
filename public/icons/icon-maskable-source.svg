@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="VisitaMed">
   <rect width="512" height="512" rx="1" fill="#2563eb" />
   <g fill="none" stroke="#ffffff" stroke-width="44" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M96 128L176 384L256 128" />
-    <path d="M288 384V128L384 384L480 128V384" />
+    <path d="M112 140L170 372L228 140" />
+    <path d="M280 372V140L340 372L400 140V372" />
   </g>
 </svg>
