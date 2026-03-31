@@ -44,7 +44,7 @@ export async function getCurrentUserVisitMember(visitId: string): Promise<VisitM
 }
 
 /**
- * Lista todos os membros ativos de uma visita
+ * Lista todos os membros de uma visita (ativos e removidos)
  */
 export async function listVisitMembers(visitId: string): Promise<VisitMember[]> {
   return db.visitMembers.where('visitId').equals(visitId).toArray();

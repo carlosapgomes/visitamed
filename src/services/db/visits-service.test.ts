@@ -2,7 +2,7 @@
  * Testes para visits-service - validação de criação de visitas e membership
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { createOwnerVisitMember } from './visit-members-service';
 
 describe('visit-members-service - createOwnerVisitMember', () => {
