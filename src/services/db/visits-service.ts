@@ -6,6 +6,7 @@
 import { db } from './dexie-db';
 import { createVisit, generatePrivateVisitName, getCurrentDate, type Visit } from '@/models/visit';
 import { getAuthState } from '@/services/auth/auth-service';
+import { createOwnerVisitMember } from './visit-members-service';
 
 /**
  * Obtém o ID do usuário atual ou lança erro se não autenticado
@@ -45,7 +46,13 @@ export async function createPrivateVisit(namePrefix?: string): Promise<Visit> {
     mode: 'private',
   });
 
-  await db.visits.add(visit);
+  // Cria membership do owner em transação atômica
+  const ownerMember = createOwnerVisitMember(visit.id, userId);
+
+  await db.transaction('rw', [db.visits, db.visitMembers], async () => {
+    await db.visits.add(visit);
+    await db.visitMembers.add(ownerMember);
+  });
 
   return visit;
 }
