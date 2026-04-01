@@ -5,36 +5,15 @@
 
 import { LitElement, html } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
-import { navigate } from '@/router/router';
-import { signInWithGoogle, subscribeToAuth, type AuthState } from '@/services/auth/auth-service';
+import { signInWithGoogle } from '@/services/auth/auth-service';
 
 @customElement('login-view')
 export class LoginView extends LitElement {
   @state() private isLoading = false;
   @state() private error = '';
 
-  private unsubscribe: (() => void) | null = null;
-
   protected override createRenderRoot(): HTMLElement {
     return this;
-  }
-
-  override connectedCallback(): void {
-    super.connectedCallback();
-
-    // Subscribe para detectar se usuário já está logado
-    this.unsubscribe = subscribeToAuth((state: AuthState) => {
-      if (state.user && !state.loading) {
-        navigate('/dashboard', true);
-      }
-    });
-  }
-
-  override disconnectedCallback(): void {
-    super.disconnectedCallback();
-    if (this.unsubscribe) {
-      this.unsubscribe();
-    }
   }
 
   private handleLogin = async (): Promise<void> => {
@@ -42,7 +21,7 @@ export class LoginView extends LitElement {
       this.isLoading = true;
       this.error = '';
       await signInWithGoogle();
-      // Navegação será feita pelo subscriber
+      // Navegação pós-login é tratada por app.ts (revalidateRoute)
     } catch (err) {
       this.error = err instanceof Error ? err.message : 'Erro ao fazer login';
       this.isLoading = false;
