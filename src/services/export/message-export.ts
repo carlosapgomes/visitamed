@@ -31,7 +31,7 @@ export type ExportScope = DateScope | TagScope;
 export interface ExportOptions {
   format: 'text' | 'markdown' | 'json';
   includeReference: boolean;
-  groupBy: 'date' | 'ward' | 'none';
+  groupBy: 'date' | 'tag' | 'none';
 }
 
 export const DEFAULT_EXPORT_OPTIONS: ExportOptions = {
@@ -130,12 +130,12 @@ export function exportNotesAsText(notes: Note[], options: ExportOptions = DEFAUL
       }
       lines.push('');
     }
-  } else if (options.groupBy === 'ward') {
-    const grouped = groupByWard(notes);
-    for (const [ward, wardNotes] of grouped) {
-      lines.push(`🏥 ${ward}`);
+  } else if (options.groupBy === 'tag') {
+    const grouped = groupByTag(notes);
+    for (const [tag, tagNotes] of grouped) {
+      lines.push(`🏷️ ${tag}`);
       lines.push('');
-      for (const note of wardNotes) {
+      for (const note of tagNotes) {
         lines.push(formatNoteEntry(note, options));
       }
       lines.push('');
@@ -170,12 +170,12 @@ export function exportNotesAsMarkdown(notes: Note[], options: ExportOptions = DE
         lines.push(formatNoteEntryMarkdown(note, options));
       }
     }
-  } else if (options.groupBy === 'ward') {
-    const grouped = groupByWard(notes);
-    for (const [ward, wardNotes] of grouped) {
-      lines.push(`## ${ward}`);
+  } else if (options.groupBy === 'tag') {
+    const grouped = groupByTag(notes);
+    for (const [tag, tagNotes] of grouped) {
+      lines.push(`## ${tag}`);
       lines.push('');
-      for (const note of wardNotes) {
+      for (const note of tagNotes) {
         lines.push(formatNoteEntryMarkdown(note, options));
       }
     }
@@ -223,16 +223,27 @@ function groupByDate(notes: Note[]): Map<string, Note[]> {
 }
 
 /**
- * Agrupa notas por ala
+ * Agrupa notas por tag (fan-out simples: nota com múltiplas tags aparece em múltiplos grupos)
  */
-function groupByWard(notes: Note[]): Map<string, Note[]> {
+function groupByTag(notes: Note[]): Map<string, Note[]> {
   const grouped = new Map<string, Note[]>();
-  const sorted = [...notes].sort((a, b) => a.ward.localeCompare(b.ward));
+  const sorted = [...notes].sort((a, b) => {
+    const tagsA = a.tags ?? [];
+    const tagsB = b.tags ?? [];
+    const firstTagA = tagsA[0] ?? '';
+    const firstTagB = tagsB[0] ?? '';
+    return firstTagA.localeCompare(firstTagB);
+  });
 
   for (const note of sorted) {
-    const existing = grouped.get(note.ward) ?? [];
-    existing.push(note);
-    grouped.set(note.ward, existing);
+    const tags = note.tags ?? [];
+    if (tags.length === 0) continue; // Ignora notas sem tags válidas
+
+    for (const tag of tags) {
+      const existing = grouped.get(tag) ?? [];
+      existing.push(note);
+      grouped.set(tag, existing);
+    }
   }
 
   return grouped;
