@@ -7,6 +7,7 @@
 
 import { db } from '@/services/db/dexie-db';
 import type { Note } from '@/models/note';
+import type { VisitMember } from '@/models/visit-member';
 import type { SyncQueueItem } from '@/models/sync-queue';
 import type { WardStat } from '@/models/ward-stat';
 import { normalizeSettings, SETTINGS_ID, type Settings } from '@/models/settings';
@@ -203,6 +204,99 @@ async function processSyncItem(item: SyncQueueItem, firestore: Firestore): Promi
 }
 
 /**
+ * Busca memberships locais ativos do usuário
+ */
+async function getActiveMemberships(userId: string): Promise<VisitMember[]> {
+  return db.visitMembers
+    .where({ userId, status: 'active' })
+    .toArray();
+}
+
+/**
+ * Faz bootstrap best-effort de dados mínimos da visita para owner local.
+ * Cria/atualiza /visits/{visitId} e /visits/{visitId}/members/{uid}.
+ */
+async function bootstrapVisitForOwner(
+  firestore: Firestore,
+  visitId: string,
+  userId: string
+): Promise<void> {
+  try {
+    // Bootstrap mínimo do documento da visita
+    const visitRef = doc(firestore, 'visits', visitId);
+    await setDoc(
+      visitRef,
+      {
+        id: visitId,
+        userId, // owner
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+      { merge: true }
+    );
+
+    // Bootstrap do membership owner
+    const memberRef = doc(firestore, 'visits', visitId, 'members', userId);
+    await setDoc(
+      memberRef,
+      {
+        id: `${visitId}:${userId}`,
+        visitId,
+        userId,
+        role: 'owner',
+        status: 'active',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+      { merge: true }
+    );
+  } catch (error) {
+    console.warn(`[VisitaMed] Bootstrap de visita ${visitId} falhou (best-effort):`, error);
+  }
+}
+
+/**
+ * Faz mirror best-effort de nota para /visits/{visitId}/notes/{noteId}
+ */
+async function mirrorNoteToVisit(
+  firestore: Firestore,
+  visitId: string,
+  noteId: string,
+  noteData: DocumentData
+): Promise<void> {
+  if (!visitId) {
+    return;
+  }
+
+  try {
+    const visitNoteRef = doc(firestore, 'visits', visitId, 'notes', noteId);
+    await setDoc(visitNoteRef, noteData, { merge: true });
+  } catch (error) {
+    console.warn(`[VisitaMed] Mirror de nota ${noteId} para visita ${visitId} falhou (best-effort):`, error);
+  }
+}
+
+/**
+ * Remove nota espelhada da visita (best-effort)
+ */
+async function deleteMirroredVisitNote(
+  firestore: Firestore,
+  visitId: string,
+  noteId: string
+): Promise<void> {
+  if (!visitId) {
+    return;
+  }
+
+  try {
+    const visitNoteRef = doc(firestore, 'visits', visitId, 'notes', noteId);
+    await deleteDoc(visitNoteRef);
+  } catch (error) {
+    console.warn(`[VisitaMed] Delete do mirror da nota ${noteId} na visita ${visitId} falhou (best-effort):`, error);
+  }
+}
+
+/**
  * Processa sync de nota
  */
 async function processNoteSyncItem(item: SyncQueueItem, firestore: Firestore): Promise<void> {
@@ -217,6 +311,7 @@ async function processNoteSyncItem(item: SyncQueueItem, firestore: Firestore): P
   const noteData = notePayload as unknown as DocumentData;
   const noteRef = doc(firestore, 'users', item.userId, 'notes', item.entityId);
 
+  // === SYNC LEGADO (sempre executa) ===
   if (item.operation === 'create') {
     await setDoc(noteRef, noteData);
   }
@@ -231,6 +326,32 @@ async function processNoteSyncItem(item: SyncQueueItem, firestore: Firestore): P
 
   if (item.operation === 'delete') {
     await deleteDoc(noteRef);
+  }
+
+  // === BOOTSTRAP PARA OWNER LOCAL (best-effort) ===
+  if (item.operation !== 'delete' && notePayload.visitId) {
+    const activeMemberships = await getActiveMemberships(item.userId);
+    const ownerMembership = activeMemberships.find(
+      (m) => m.visitId === notePayload.visitId && m.role === 'owner'
+    );
+
+    if (ownerMembership) {
+      await bootstrapVisitForOwner(firestore, notePayload.visitId, item.userId);
+    }
+  }
+
+  // === MIRROR PARA VISITA (best-effort) ===
+  if (notePayload.visitId) {
+    if (item.operation === 'delete') {
+      await deleteMirroredVisitNote(firestore, notePayload.visitId, item.entityId);
+    } else {
+      await mirrorNoteToVisit(
+        firestore,
+        notePayload.visitId,
+        item.entityId,
+        noteData
+      );
+    }
   }
 
   if (item.operation !== 'delete') {
@@ -401,6 +522,13 @@ async function syncIfAuthenticated(): Promise<void> {
 }
 
 /**
+ * Obtém timestamp para comparação (updatedAt ?? createdAt)
+ */
+export function getNoteTimestamp(note: Note): Date {
+  return note.updatedAt ?? note.createdAt;
+}
+
+/**
  * Resolve conflito entre nota local e remota usando política LWW.
  *
  * Regras:
@@ -422,8 +550,8 @@ export function resolveNoteConflict(local: Note | undefined, remote: Note): Note
   }
 
   // Caso 3: ambos synced - comparar timestamps (LWW)
-  const localVersion = local.updatedAt ?? local.createdAt;
-  const remoteVersion = remote.updatedAt ?? remote.createdAt;
+  const localVersion = getNoteTimestamp(local);
+  const remoteVersion = getNoteTimestamp(remote);
 
   if (remoteVersion > localVersion) {
     return remote;
@@ -434,9 +562,69 @@ export function resolveNoteConflict(local: Note | undefined, remote: Note): Note
 }
 
 /**
+ * Deduplica notas remotas por ID, mantendo a versão com timestamp mais recente.
+ * Usa updatedAt como prioridade, createdAt como fallback.
+ */
+export function deduplicateNotes(notes: Note[]): Note[] {
+  const noteMap = new Map<string, Note>();
+
+  for (const note of notes) {
+    const existing = noteMap.get(note.id);
+
+    if (!existing) {
+      noteMap.set(note.id, note);
+      continue;
+    }
+
+    // Comparar timestamps
+    const existingTime = getNoteTimestamp(existing);
+    const noteTime = getNoteTimestamp(note);
+
+    // Manter a versão mais recente
+    if (noteTime > existingTime) {
+      noteMap.set(note.id, note);
+    }
+  }
+
+  return Array.from(noteMap.values());
+}
+
+/**
  * Pull inicial de notas remotas do Firestore para IndexedDB
  * Hidrata dados locais no login usando notas já existentes na nuvem
  */
+/**
+ * Busca notas de /visits/{visitId}/notes para memberships locais ativos
+ */
+async function pullNotesFromVisits(
+  firestore: Firestore,
+  userId: string
+): Promise<Note[]> {
+  const activeMemberships = await getActiveMemberships(userId);
+  const allNotes: Note[] = [];
+
+  for (const membership of activeMemberships) {
+    try {
+      const visitNotesCollection = collection(firestore, 'visits', membership.visitId, 'notes');
+      const visitNotesSnapshot = await getDocs(visitNotesCollection);
+
+      for (const docSnap of visitNotesSnapshot.docs) {
+        const data = docSnap.data() as FirestoreNoteData;
+        const remoteNote = convertFirestoreNoteToLocal(docSnap.id, data, userId);
+
+        // Aplicar mesma política de conflito usada no pull legado
+        const localNote = await db.notes.get(docSnap.id);
+        const resolvedNote = resolveNoteConflict(localNote, remoteNote);
+        allNotes.push(resolvedNote);
+      }
+    } catch (error) {
+      console.warn(`[VisitaMed] Pull de notas da visita ${membership.visitId} falhou:`, error);
+    }
+  }
+
+  return allNotes;
+}
+
 export async function pullRemoteNotes(): Promise<void> {
   const { user, loading } = getAuthState();
 
@@ -464,14 +652,11 @@ export async function pullRemoteNotes(): Promise<void> {
   let pullError: string | null = null;
 
   try {
+    // === PULL LEGADO: /users/{uid}/notes ===
     const notesCollection = collection(firestore, 'users', user.uid, 'notes');
     const notesSnapshot = await getDocs(notesCollection);
 
-    if (notesSnapshot.empty) {
-      return;
-    }
-
-    const notesToUpsert: Note[] = [];
+    const legacyNotes: Note[] = [];
 
     for (const docSnap of notesSnapshot.docs) {
       const data = docSnap.data() as FirestoreNoteData;
@@ -485,8 +670,8 @@ export async function pullRemoteNotes(): Promise<void> {
 
       // Log de debug apenas quando há conflito real
       if (localNote && localNote.syncStatus !== 'pending' && localNote.syncStatus !== 'failed') {
-        const localVersion = localNote.updatedAt ?? localNote.createdAt;
-        const remoteVersion = remoteNote.updatedAt ?? remoteNote.createdAt;
+        const localVersion = getNoteTimestamp(localNote);
+        const remoteVersion = getNoteTimestamp(remoteNote);
         if (remoteVersion > localVersion) {
           console.debug(`[VisitaMed] Conflito resolvido (remote wins): ${docSnap.id}`);
         } else if (localVersion > remoteVersion) {
@@ -494,10 +679,18 @@ export async function pullRemoteNotes(): Promise<void> {
         }
       }
 
-      notesToUpsert.push(resolvedNote);
+      legacyNotes.push(resolvedNote);
     }
 
-    // Upsert into IndexedDB com notas resolvidas
+    // === PULL POR VISITA: /visits/{visitId}/notes ===
+    const visitNotes = await pullNotesFromVisits(firestore, user.uid);
+
+    // === DEDUPLICAR NOTAS REMOTAS ===
+    const allRemoteNotes = [...legacyNotes, ...visitNotes];
+    const deduplicatedNotes = deduplicateNotes(allRemoteNotes);
+    const notesToUpsert = deduplicatedNotes;
+
+    // Upsert into IndexedDB com notas resolvidas e deduplicadas
     await db.notes.bulkPut(notesToUpsert);
 
     // Reconciliação: remover localmente notas órfãs (deletadas remotamente)
@@ -519,7 +712,13 @@ export async function pullRemoteNotes(): Promise<void> {
       console.log(`[VisitaMed] ${String(orphanedIds.length)} notas órfãs removidas localmente`);
     }
 
-    console.log(`[VisitaMed] Pull concluído: ${String(notesToUpsert.length)} notas importadas`);
+    const legacyCount = legacyNotes.length;
+    const visitCount = visitNotes.length;
+    const uniqueCount = notesToUpsert.length;
+    const deduplicationStatus = uniqueCount < legacyCount + visitCount ? 'deduplicadas' : 'únicas';
+    console.log(
+      `[VisaMed] Pull concluído: ${String(uniqueCount)} notas (${String(legacyCount)} legacy + ${String(visitCount)} visitas, ${deduplicationStatus})`
+    );
   } catch (error) {
     pullError = error instanceof Error ? error.message : 'Erro no pull de notas remotas';
     console.error('[VisitaMed] Erro no pull de notas remotas:', error);

@@ -310,6 +310,114 @@ describe('sync-service - resolveNoteConflict', () => {
   });
 });
 
+describe('sync-service - getNoteTimestamp', () => {
+  it('deve retornar updatedAt quando existe', () => {
+    const note = {
+      id: 'note-1',
+      userId: 'user-123',
+      date: '2024-03-25',
+      ward: 'UTI',
+      bed: '01',
+      visitId: 'visit-1',
+      note: 'Nota',
+      createdAt: new Date('2024-03-25T10:00:00'),
+      updatedAt: new Date('2024-03-25T12:00:00'),
+      expiresAt: new Date(),
+      syncStatus: 'synced' as const,
+    };
+
+    const result = syncService.getNoteTimestamp(note);
+    expect(result).toEqual(new Date('2024-03-25T12:00:00'));
+  });
+
+  it('deve retornar createdAt quando updatedAt é undefined', () => {
+    const note = {
+      id: 'note-1',
+      userId: 'user-123',
+      date: '2024-03-25',
+      ward: 'UTI',
+      bed: '01',
+      visitId: 'visit-1',
+      note: 'Nota',
+      createdAt: new Date('2024-03-25T10:00:00'),
+      updatedAt: undefined,
+      expiresAt: new Date(),
+      syncStatus: 'synced' as const,
+    };
+
+    const result = syncService.getNoteTimestamp(note);
+    expect(result).toEqual(new Date('2024-03-25T10:00:00'));
+  });
+});
+
+describe('sync-service - deduplicateNotes', () => {
+  const makeNote = (id: string, createdAt: Date, updatedAt?: Date) => ({
+    id,
+    userId: 'user-123',
+    date: '2024-03-25',
+    ward: 'UTI',
+    bed: '01',
+    visitId: 'visit-1',
+    note: `Nota ${id}`,
+    createdAt,
+    updatedAt,
+    expiresAt: new Date(),
+    syncStatus: 'synced' as const,
+  });
+
+  it('deve retornar todas as notas se não há duplicatas', () => {
+    const notes = [
+      makeNote('note-1', new Date('2024-03-25T10:00:00')),
+      makeNote('note-2', new Date('2024-03-25T11:00:00')),
+      makeNote('note-3', new Date('2024-03-25T12:00:00')),
+    ];
+
+    const result = syncService.deduplicateNotes(notes);
+    expect(result).toHaveLength(3);
+  });
+
+  it('deve remover duplicatas mantendo a versão mais recente por updatedAt', () => {
+    const notes = [
+      makeNote('note-1', new Date('2024-03-25T10:00:00'), new Date('2024-03-25T10:00:00')),
+      makeNote('note-1', new Date('2024-03-25T10:00:00'), new Date('2024-03-25T12:00:00')),
+      makeNote('note-2', new Date('2024-03-25T11:00:00')),
+    ];
+
+    const result = syncService.deduplicateNotes(notes);
+    expect(result).toHaveLength(2);
+    expect(result.find((n) => n.id === 'note-1')?.note).toBe('Nota note-1');
+    expect(result.find((n) => n.id === 'note-1')?.updatedAt).toEqual(new Date('2024-03-25T12:00:00'));
+  });
+
+  it('deve usar createdAt como fallback quando updatedAt undefined', () => {
+    const notes = [
+      makeNote('note-1', new Date('2024-03-25T10:00:00'), undefined),
+      makeNote('note-1', new Date('2024-03-25T12:00:00'), undefined),
+    ];
+
+    const result = syncService.deduplicateNotes(notes);
+    expect(result).toHaveLength(1);
+    expect(result[0].createdAt).toEqual(new Date('2024-03-25T12:00:00'));
+  });
+
+  it('deve manter local quando timestamps são iguais', () => {
+    const sameTime = new Date('2024-03-25T12:00:00');
+    const notes = [
+      makeNote('note-1', sameTime, sameTime),
+      makeNote('note-1', sameTime, sameTime),
+    ];
+
+    const result = syncService.deduplicateNotes(notes);
+    expect(result).toHaveLength(1);
+    // Mantém a primeira ocorrência
+  });
+
+  it('deve lidar com array vazio', () => {
+    const result = syncService.deduplicateNotes([]);
+    expect(result).toHaveLength(0);
+  });
+});
+
 describe('sync-service - initializeSync / cleanupSync', () => {
   afterEach(() => {
     syncService.cleanupSync();
