@@ -10,6 +10,7 @@ import type { SyncQueueItem } from '@/models/sync-queue';
 import type { WardStat } from '@/models/ward-stat';
 import type { Visit } from '@/models/visit';
 import type { VisitMember } from '@/models/visit-member';
+import type { VisitInvite } from '@/models/visit-invite';
 
 /**
  * Classe principal do banco de dados
@@ -21,6 +22,7 @@ class VisitaMedDB extends Dexie {
   wardStats!: EntityTable<WardStat, 'id'>;
   visits!: EntityTable<Visit, 'id'>;
   visitMembers!: EntityTable<VisitMember, 'id'>;
+  visitInvites!: EntityTable<VisitInvite, 'id'>;
 
   constructor() {
     super('VisitaMedDB');
@@ -87,6 +89,21 @@ class VisitaMedDB extends Dexie {
       .upgrade(async (_tx) => {
         // Greenfield - sem dados para migrar
       });
+
+    this.version(6)
+      .stores({
+        notes: 'id, userId, visitId, date, ward, syncStatus, expiresAt',
+        settings: 'id, userId',
+        syncQueue: 'id, userId, entityType, entityId, createdAt',
+        wardStats: 'id, userId, wardKey, lastUsedAt',
+        visits: 'id, userId, date',
+        visitMembers: 'id, visitId, userId, role, status, updatedAt',
+        // VisitInvites: visitId para listar, token para busca, expiresAt para filtros
+        visitInvites: 'id, visitId, createdByUserId, token, role, expiresAt, createdAt, revokedAt',
+      })
+      .upgrade(async (_tx) => {
+        // Greenfield - sem dados para migrar
+      });
   }
 }
 
@@ -97,13 +114,14 @@ export const db = new VisitaMedDB();
  * Usado no logout para evitar dados órfãos em dispositivo compartilhado
  */
 export async function clearLocalUserData(): Promise<void> {
-  await db.transaction('rw', [db.notes, db.settings, db.syncQueue, db.wardStats, db.visits, db.visitMembers], async () => {
+  await db.transaction('rw', [db.notes, db.settings, db.syncQueue, db.wardStats, db.visits, db.visitMembers, db.visitInvites], async () => {
     await db.notes.clear();
     await db.settings.clear();
     await db.syncQueue.clear();
     await db.wardStats.clear();
     await db.visits.clear();
     await db.visitMembers.clear();
+    await db.visitInvites.clear();
   });
 }
 
