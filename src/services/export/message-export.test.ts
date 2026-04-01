@@ -26,11 +26,11 @@ function createTestNote(overrides: Partial<Note>): Note {
 }
 
 describe('generateMessage', () => {
-  describe('escopo ward', () => {
-    it('gera mensagem com título da ward', () => {
+  describe('escopo tag', () => {
+    it('gera mensagem com título da tag', () => {
       const scope: ExportScope = {
-        type: 'ward',
-        ward: 'Intermediário',
+        type: 'tag',
+        tag: 'Intermediário',
         notes: [createTestNote({ bed: 'I04A', note: 'aguarda RX' })],
       };
 
@@ -41,8 +41,8 @@ describe('generateMessage', () => {
 
     it('formata nota no formato correto', () => {
       const scope: ExportScope = {
-        type: 'ward',
-        ward: 'UTI',
+        type: 'tag',
+        tag: 'UTI',
         notes: [createTestNote({ bed: 'U02', note: 'discutir antibiótico' })],
       };
 
@@ -53,8 +53,8 @@ describe('generateMessage', () => {
 
     it('inclui referência quando presente', () => {
       const scope: ExportScope = {
-        type: 'ward',
-        ward: 'UTI',
+        type: 'tag',
+        tag: 'UTI',
         notes: [createTestNote({ bed: 'I04A', reference: 'AB', note: 'aguarda RX' })],
       };
 
@@ -65,8 +65,8 @@ describe('generateMessage', () => {
 
     it('não inclui referência quando ausente', () => {
       const scope: ExportScope = {
-        type: 'ward',
-        ward: 'UTI',
+        type: 'tag',
+        tag: 'UTI',
         notes: [createTestNote({ bed: 'I04A', note: 'aguarda RX' })],
       };
 
@@ -78,8 +78,8 @@ describe('generateMessage', () => {
 
     it('lista múltiplas notas', () => {
       const scope: ExportScope = {
-        type: 'ward',
-        ward: 'Intermediário',
+        type: 'tag',
+        tag: 'Intermediário',
         notes: [
           createTestNote({ bed: 'I04A', note: 'aguarda RX' }),
           createTestNote({ bed: 'I04B', note: 'preparar operatório' }),
@@ -98,9 +98,9 @@ describe('generateMessage', () => {
       const scope: ExportScope = {
         type: 'date',
         date: '2024-03-25',
-        wards: [
+        tags: [
           {
-            ward: 'UTI',
+            tag: 'UTI',
             notes: [createTestNote({ bed: 'U02', note: 'discutir antibiótico' })],
           },
         ],
@@ -111,20 +111,20 @@ describe('generateMessage', () => {
       expect(result).toContain('*Pendências*');
     });
 
-    it('renderiza múltiplas wards', () => {
+    it('renderiza múltiplas tags', () => {
       const scope: ExportScope = {
         type: 'date',
         date: '2024-03-25',
-        wards: [
+        tags: [
           {
-            ward: 'Intermediário',
+            tag: 'Intermediário',
             notes: [
               createTestNote({ bed: 'I04A', note: 'aguarda RX' }),
               createTestNote({ bed: 'I04B', note: 'preparar operatório' }),
             ],
           },
           {
-            ward: 'UTI',
+            tag: 'UTI',
             notes: [createTestNote({ bed: 'U02', note: 'discutir antibiótico' })],
           },
         ],
@@ -139,13 +139,13 @@ describe('generateMessage', () => {
       expect(result).toContain('- U02 | discutir antibiótico');
     });
 
-    it('inclui referência nas notas dentro de ward', () => {
+    it('inclui referência nas notas dentro de tag', () => {
       const scope: ExportScope = {
         type: 'date',
         date: '2024-03-25',
-        wards: [
+        tags: [
           {
-            ward: 'Intermediário',
+            tag: 'Intermediário',
             notes: [createTestNote({ bed: 'I05A', reference: 'AB', note: 'avaliar cirurgia' })],
           },
         ],
@@ -156,4 +156,5 @@ describe('generateMessage', () => {
       expect(result).toContain('- I05A (AB) | avaliar cirurgia');
     });
   });
+
 });

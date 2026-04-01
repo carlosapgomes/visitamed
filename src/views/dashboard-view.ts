@@ -187,19 +187,19 @@ export class DashboardView extends LitElement {
   private buildExportScope(): ExportScope | null {
     if (!this.selectedScope) return null;
 
-    // Map tag scope to ward for export compatibility (S9A will update export service)
+    // Native export scope by tags (S9A)
     switch (this.selectedScope.type) {
       case 'tag':
-        return { type: 'ward', ward: this.selectedScope.tag, notes: this.selectedScope.notes };
+        return { type: 'tag', tag: this.selectedScope.tag, notes: this.selectedScope.notes };
       case 'date':
         return {
           type: 'date',
           date: this.selectedScope.date,
-          wards: this.selectedScope.tags.map(t => ({ ward: t.tag, notes: t.notes })),
+          tags: this.selectedScope.tags.map(t => ({ tag: t.tag, notes: t.notes })),
         };
     }
 
-    // For backwards compatibility - should never reach here
+    // Should never reach here
     return null;
   }
 

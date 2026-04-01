@@ -5,9 +5,9 @@
 
 import type { Note } from '@/models/note';
 
-/** Estrutura de wards agrupadas */
-export interface WardGroupData {
-  ward: string;
+/** Estrutura de tags agrupadas */
+export interface TagGroupData {
+  tag: string;
   notes: Note[];
 }
 
@@ -15,18 +15,18 @@ export interface WardGroupData {
 export interface DateScope {
   type: 'date';
   date: string;
-  wards: WardGroupData[];
+  tags: TagGroupData[];
 }
 
-/** Escopo de exportação por ala */
-export interface WardScope {
-  type: 'ward';
-  ward: string;
+/** Escopo de exportação por tag */
+export interface TagScope {
+  type: 'tag';
+  tag: string;
   notes: Note[];
 }
 
 /** Escopo de exportação */
-export type ExportScope = DateScope | WardScope;
+export type ExportScope = DateScope | TagScope;
 
 export interface ExportOptions {
   format: 'text' | 'markdown' | 'json';
@@ -46,19 +46,21 @@ export const DEFAULT_EXPORT_OPTIONS: ExportOptions = {
  * Formato para data:
  * *Pendências*
  *
- * *Ward*
+ * *Tag*
  * - LEITO | nota
  * - LEITO (ref) | nota
  *
- * Formato para ward:
- * *Ward*
+ * Formato para tag:
+ * *Tag*
  * - LEITO | nota
+ *
  */
 export function generateMessage(scope: ExportScope): string {
   if (scope.type === 'date') {
     return generateDateMessage(scope);
   }
-  return generateWardMessage(scope);
+
+  return generateTagMessage(scope);
 }
 
 /**
@@ -70,9 +72,9 @@ function generateDateMessage(scope: DateScope): string {
   lines.push('*Pendências*');
   lines.push('');
 
-  for (const wardGroup of scope.wards) {
-    lines.push(`*${wardGroup.ward}*`);
-    for (const note of wardGroup.notes) {
+  for (const tagGroup of scope.tags) {
+    lines.push(`*${tagGroup.tag}*`);
+    for (const note of tagGroup.notes) {
       lines.push(formatNoteLine(note));
     }
     lines.push('');
@@ -82,12 +84,12 @@ function generateDateMessage(scope: DateScope): string {
 }
 
 /**
- * Gera mensagem para escopo de ala
+ * Gera mensagem para escopo de tag
  */
-function generateWardMessage(scope: WardScope): string {
+function generateTagMessage(scope: TagScope): string {
   const lines: string[] = [];
 
-  lines.push(`*${scope.ward}*`);
+  lines.push(`*${scope.tag}*`);
   lines.push('');
 
   for (const note of scope.notes) {
@@ -96,6 +98,7 @@ function generateWardMessage(scope: WardScope): string {
 
   return lines.join('\n').trim();
 }
+
 
 /**
  * Formata uma linha de nota no formato: - LEITO | nota
