@@ -64,7 +64,7 @@
 | S6A | DONE | Duplicar visita (nova data, novo owner) | `docs/collab-slice6a-duplicate-visit-private-owner-handoff-prompt.md` |
 | S7A | DONE | Base de tags (`ward` -> `tags[]`) | `docs/collab-slice7a-tags-foundation-handoff-prompt.md` |
 | S7B | DONE | UI múltiplas tags + remover-tag-ou-nota | `docs/collab-slice7b-tags-ui-remove-tag-or-note-handoff-prompt.md` |
-| S8A | TODO | Agrupamento dashboard por tags (TDD) | (gerar) |
+| S8A | DONE | Agrupamento dashboard por tags (TDD) | `docs/collab-slice8a-dashboard-group-by-tags-tdd-handoff-prompt.md` |
 | S8B | TODO | Componente de grupo por tag + actions | (gerar) |
 | S9A | TODO | Exportação com mesmo critério do dashboard | (gerar) |
 | S10 | TODO | Hardening final + limpeza | (gerar) |
@@ -91,8 +91,9 @@
 - S6A: `c977b27`
 - S7A: `fcd5be7`
 - S7B: `c3676c2`
+- S8A: `a2b387f`
 
-Estado atual validado localmente: typecheck/lint/test verdes (225 testes).
+Estado atual validado localmente: typecheck/lint/test verdes (237 testes).
 
 ---
 
