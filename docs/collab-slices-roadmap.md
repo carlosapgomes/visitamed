@@ -56,8 +56,8 @@
 | S3B1 | DONE | Persistência local de convites + testes de serviço | `prompts/collab-slice3b1-invite-local-persistence-handoff-prompt.md` |
 | S3B2 | DONE | Aceitar convite por token + rota/view | `prompts/collab-slice3b2-accept-invite-by-token-handoff-prompt.md` |
 | S4A | DONE | Remoção de membro owner-only (serviço + testes) | `prompts/collab-slice4a-owner-remove-member-handoff-prompt.md` |
-| S4B | TODO | UX de revogação (feedback/fluxo) | `docs/collab-slice4b-revocation-ux-handoff-prompt.md` |
-| S5A | TODO | Firestore schema colaborativo + rules ACL | (gerar) |
+| S4B | DONE | UX de revogação (feedback/fluxo) | `docs/collab-slice4b-revocation-ux-handoff-prompt.md` |
+| S5A | TODO | Firestore schema colaborativo + rules ACL | `docs/collab-slice5a-firestore-acl-baseline-handoff-prompt.md` |
 | S5B | TODO | Sync push/pull por visita | (gerar) |
 | S5C | TODO | Conflitos offline (`delete > update`) + descarte pós-revogação | (gerar) |
 | S5D | TODO | Realtime apenas da visita aberta | (gerar) |
@@ -83,8 +83,9 @@
 - S3B2: `1e644ca`
 - Fix redirect pós-login centralizado: `b00b5ec`
 - S4A: `0b27603`
+- S4B: `04a488e`
 
-Estado atual validado localmente: typecheck/lint/test verdes (170+ testes).
+Estado atual validado localmente: typecheck/lint/test verdes (174 testes).
 
 ---
 
