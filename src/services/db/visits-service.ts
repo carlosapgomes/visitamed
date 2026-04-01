@@ -5,8 +5,11 @@
 
 import { db } from './dexie-db';
 import { createVisit, generatePrivateVisitName, getCurrentDate, type Visit } from '@/models/visit';
+import { createNote, type Note } from '@/models/note';
+import { createSyncQueueItem } from '@/models/sync-queue';
 import { getAuthState } from '@/services/auth/auth-service';
-import { createOwnerVisitMember } from './visit-members-service';
+import { createOwnerVisitMember, getVisitMember } from './visit-members-service';
+import { canDuplicateVisit } from '@/services/auth/visit-permissions';
 
 /**
  * Obtém o ID do usuário atual ou lança erro se não autenticado
@@ -93,4 +96,90 @@ export async function getVisitById(visitId: string): Promise<Visit | undefined> 
   validateOwnership(visit, userId);
 
   return visit;
+}
+
+/**
+ * Enfileira operação de sync para nota dentro de transação local
+ */
+async function queueNoteForSyncInTransaction(
+  operation: 'create' | 'update' | 'delete',
+  note: Note
+): Promise<void> {
+  const item = createSyncQueueItem(note.userId, operation, 'note', note.id, note);
+  await db.syncQueue.add(item);
+}
+
+/**
+ * Duplica uma visita como visita privada do usuário atual
+ * Copia todas as notas da visita origem para a nova visita
+ * @param sourceVisitId - ID da visita a ser duplicada
+ * @returns Nova visita privada criada
+ * @throws Error se usuário não autenticado ou sem permissão
+ */
+export async function duplicateVisitAsPrivate(sourceVisitId: string): Promise<Visit> {
+  const userId = requireUserId();
+
+  // Buscar visita origem
+  const sourceVisit = await db.visits.get(sourceVisitId);
+  if (!sourceVisit) {
+    throw new Error('Visita não encontrada');
+  }
+
+  // Verificar membership do usuário na visita origem
+  const membership = await getVisitMember(sourceVisitId, userId);
+  if (!membership || !canDuplicateVisit(membership)) {
+    throw new Error('Sem permissão para duplicar esta visita');
+  }
+
+  // Criar nova visita privada
+  const newDate = getCurrentDate();
+  const newVisitName = `${sourceVisit.name} (cópia)`;
+
+  const newVisit = createVisit({
+    userId,
+    name: newVisitName,
+    date: newDate,
+    mode: 'private',
+  });
+
+  // Criar membership owner da nova visita
+  const newOwnerMember = createOwnerVisitMember(newVisit.id, userId);
+
+  // Buscar notas da visita origem
+  const sourceNotes = await db.notes.where('visitId').equals(sourceVisitId).toArray();
+
+  // Criar notas duplicadas
+  const duplicatedNotes: Note[] = sourceNotes.map((note) =>
+    createNote({
+      userId,
+      visitId: newVisit.id,
+      date: newDate,
+      ward: note.ward,
+      bed: note.bed,
+      note: note.note,
+      reference: note.reference,
+      syncStatus: 'pending',
+    })
+  );
+
+  // Transação atômica: visita + membership + notas + sync queue
+  await db.transaction(
+    'rw',
+    [db.visits, db.visitMembers, db.notes, db.syncQueue],
+    async () => {
+      // Criar nova visita
+      await db.visits.add(newVisit);
+
+      // Criar membership owner
+      await db.visitMembers.add(newOwnerMember);
+
+      // Criar notas duplicadas e enfileirar sync
+      for (const note of duplicatedNotes) {
+        await db.notes.add(note);
+        await queueNoteForSyncInTransaction('create', note);
+      }
+    }
+  );
+
+  return newVisit;
 }

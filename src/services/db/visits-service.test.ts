@@ -2,8 +2,48 @@
  * Testes para visits-service - validação de criação de visitas e membership
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { createOwnerVisitMember } from './visit-members-service';
+import { duplicateVisitAsPrivate } from './visits-service';
+import type { Visit } from '@/models/visit';
+import type { Note } from '@/models/note';
+import type { VisitMember } from '@/models/visit-member';
+
+// Mocks para dependências externas
+vi.mock('@/services/auth/auth-service', () => ({
+  getAuthState: vi.fn(),
+}));
+
+vi.mock('./dexie-db', () => ({
+  db: {
+    visits: {
+      get: vi.fn(),
+      add: vi.fn(),
+    },
+    visitMembers: {
+      get: vi.fn(),
+      add: vi.fn(),
+    },
+    notes: {
+      where: vi.fn(() => ({
+        equals: vi.fn(() => ({
+          toArray: vi.fn().mockResolvedValue([]),
+        })),
+      })),
+      add: vi.fn(),
+    },
+    syncQueue: {
+      add: vi.fn(),
+    },
+    transaction: vi.fn(async (_mode: string, _stores: string[], fn: () => Promise<void>) => {
+      return fn();
+    }),
+  },
+}));
+
+// Importar db após os mocks para ter acesso aos métodos mockados
+const { db } = await import('./dexie-db');
+const { getAuthState } = await import('@/services/auth/auth-service');
 
 describe('visit-members-service - createOwnerVisitMember', () => {
   it('deve criar membership com role owner', () => {
@@ -29,16 +69,199 @@ describe('visit-members-service - createOwnerVisitMember', () => {
 });
 
 describe('visits-service - createPrivateVisit integration', () => {
-  // Este teste verifica que a lógica de criação de membership está correta
-  // A integração real com Dexie seria testada com mocks mais elaborate
-
   it('deve gerar ID de membership correto para owner', () => {
     const visitId = 'visit-abc123';
     const userId = 'user-xyz789';
 
     const ownerMember = createOwnerVisitMember(visitId, userId);
 
-    // O ID deve seguir o padrão visitId:userId
     expect(ownerMember.id).toBe('visit-abc123:user-xyz789');
+  });
+});
+
+describe('duplicateVisitAsPrivate', () => {
+  const mockUserId = 'user-current';
+  const mockSourceVisitId = 'visit-source';
+  const mockSourceVisit: Visit = {
+    id: mockSourceVisitId,
+    userId: 'user-owner',
+    name: 'Visita origem',
+    date: '2026-01-15',
+    mode: 'group',
+    createdAt: new Date(),
+  };
+  const mockSourceMember: VisitMember = {
+    id: `${mockSourceVisitId}:${mockUserId}`,
+    visitId: mockSourceVisitId,
+    userId: mockUserId,
+    role: 'editor',
+    status: 'active',
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+  const mockSourceNote: Note = {
+    id: 'note-1',
+    userId: 'user-owner',
+    visitId: mockSourceVisitId,
+    date: '2026-01-15',
+    ward: 'UTI',
+    bed: '01',
+    note: 'Paciente estável',
+    createdAt: new Date(),
+    expiresAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+    syncStatus: 'synced',
+    syncedAt: new Date(),
+  };
+
+  // Helpers para casts de tipo
+  const mockDb = db as unknown as {
+    visits: { get: ReturnType<typeof vi.fn>; add: ReturnType<typeof vi.fn> };
+    visitMembers: { get: ReturnType<typeof vi.fn>; add: ReturnType<typeof vi.fn> };
+    notes: { where: ReturnType<typeof vi.fn>; add: ReturnType<typeof vi.fn> };
+    syncQueue: { add: ReturnType<typeof vi.fn> };
+    transaction: ReturnType<typeof vi.fn>;
+  };
+  const mockGetAuthStateFn = getAuthState as unknown as ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('deve lançar erro se usuário não autenticado', async () => {
+    mockGetAuthStateFn.mockReturnValue({ user: null });
+
+    await expect(duplicateVisitAsPrivate(mockSourceVisitId)).rejects.toThrow(
+      'Usuário não autenticado'
+    );
+  });
+
+  it('deve lançar erro se visita não encontrada', async () => {
+    mockGetAuthStateFn.mockReturnValue({ user: { uid: mockUserId } });
+    mockDb.visits.get.mockResolvedValue(undefined);
+
+    await expect(duplicateVisitAsPrivate(mockSourceVisitId)).rejects.toThrow(
+      'Visita não encontrada'
+    );
+  });
+
+  it('deve lançar erro se sem membership ativo na visita origem', async () => {
+    mockGetAuthStateFn.mockReturnValue({ user: { uid: mockUserId } });
+    mockDb.visits.get.mockResolvedValue(mockSourceVisit);
+    mockDb.visitMembers.get.mockResolvedValue(undefined);
+
+    await expect(duplicateVisitAsPrivate(mockSourceVisitId)).rejects.toThrow(
+      'Sem permissão para duplicar esta visita'
+    );
+  });
+
+  it('deve lançar erro se membership removido', async () => {
+    const removedMember: VisitMember = {
+      ...mockSourceMember,
+      status: 'removed',
+      removedAt: new Date(),
+    };
+    mockGetAuthStateFn.mockReturnValue({ user: { uid: mockUserId } });
+    mockDb.visits.get.mockResolvedValue(mockSourceVisit);
+    mockDb.visitMembers.get.mockResolvedValue(removedMember);
+
+    await expect(duplicateVisitAsPrivate(mockSourceVisitId)).rejects.toThrow(
+      'Sem permissão para duplicar esta visita'
+    );
+  });
+
+  it('deve criar visita privada com sucesso e duplicar notas', async () => {
+    mockGetAuthStateFn.mockReturnValue({ user: { uid: mockUserId } });
+    mockDb.visits.get.mockResolvedValue(mockSourceVisit);
+    mockDb.visitMembers.get.mockResolvedValue(mockSourceMember);
+
+    // Mock notas da visita origem
+    const notesMock = {
+      equals: vi.fn().mockReturnValue({
+        toArray: vi.fn().mockResolvedValue([mockSourceNote]),
+      }),
+    };
+    mockDb.notes.where.mockReturnValue(notesMock as { equals: ReturnType<typeof vi.fn> });
+
+    // Capturar a visita/membro criado
+    let createdMember: VisitMember | undefined;
+    const addedNotes: Note[] = [];
+    const addedSyncItems: unknown[] = [];
+
+    mockDb.visits.add.mockResolvedValue(undefined);
+    mockDb.visitMembers.add.mockImplementation((member: VisitMember) => {
+      createdMember = member;
+    });
+    mockDb.notes.add.mockImplementation((note: Note) => {
+      addedNotes.push(note);
+    });
+    mockDb.syncQueue.add.mockImplementation((item: unknown) => {
+      addedSyncItems.push(item);
+    });
+
+    const result = await duplicateVisitAsPrivate(mockSourceVisitId);
+
+    // Verificar nova visita
+    expect(result).toBeDefined();
+    expect(result.userId).toBe(mockUserId);
+    expect(result.mode).toBe('private');
+    expect(result.name).toContain('(cópia)');
+    expect(result.date).toBe(new Date().toISOString().split('T')[0]);
+
+    // Verificar membership owner
+    expect(createdMember).toBeDefined();
+    expect(createdMember?.role).toBe('owner');
+    expect(createdMember?.userId).toBe(mockUserId);
+
+    // Verificar notas duplicadas
+    expect(addedNotes.length).toBe(1);
+    expect(addedNotes[0].userId).toBe(mockUserId);
+    expect(addedNotes[0].visitId).toBe(result.id);
+    expect(addedNotes[0].ward).toBe(mockSourceNote.ward);
+    expect(addedNotes[0].bed).toBe(mockSourceNote.bed);
+    expect(addedNotes[0].note).toBe(mockSourceNote.note);
+    expect(addedNotes[0].syncStatus).toBe('pending');
+
+    // Verificar sync queue
+    expect(addedSyncItems.length).toBe(1);
+    const syncItem = addedSyncItems[0] as { operation: string; entityType: string };
+    expect(syncItem.operation).toBe('create');
+    expect(syncItem.entityType).toBe('note');
+  });
+
+  it('deve duplicar múltiplas notas com sucesso', async () => {
+    const mockNotes = [
+      { ...mockSourceNote, id: 'note-1' },
+      { ...mockSourceNote, id: 'note-2', bed: '02' },
+      { ...mockSourceNote, id: 'note-3', bed: '03' },
+    ];
+
+    mockGetAuthStateFn.mockReturnValue({ user: { uid: mockUserId } });
+    mockDb.visits.get.mockResolvedValue(mockSourceVisit);
+    mockDb.visitMembers.get.mockResolvedValue(mockSourceMember);
+
+    const notesMock = {
+      equals: vi.fn().mockReturnValue({
+        toArray: vi.fn().mockResolvedValue(mockNotes),
+      }),
+    };
+    mockDb.notes.where.mockReturnValue(notesMock as { equals: ReturnType<typeof vi.fn> });
+
+    const addedNotes: Note[] = [];
+    const addedSyncItems: unknown[] = [];
+
+    mockDb.visits.add.mockResolvedValue(undefined);
+    mockDb.visitMembers.add.mockResolvedValue(undefined);
+    mockDb.notes.add.mockImplementation((note: Note) => {
+      addedNotes.push(note);
+    });
+    mockDb.syncQueue.add.mockImplementation((item: unknown) => {
+      addedSyncItems.push(item);
+    });
+
+    await duplicateVisitAsPrivate(mockSourceVisitId);
+
+    expect(addedNotes.length).toBe(3);
+    expect(addedSyncItems.length).toBe(3);
+    expect(addedSyncItems.every((item) => (item as { operation: string }).operation === 'create')).toBe(true);
   });
 });
