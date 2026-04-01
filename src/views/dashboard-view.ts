@@ -12,7 +12,7 @@ import { getVisitById } from '@/services/db/visits-service';
 import { getCurrentUserVisitMember } from '@/services/db/visit-members-service';
 import { canEditNote, canDeleteNote, getVisitAccessState, type VisitAccessState } from '@/services/auth/visit-permissions';
 import { getDashboardGroupActions } from '@/services/auth/dashboard-actions-policy';
-import { groupNotesByDateAndWard } from '@/utils/group-notes-by-date-and-ward';
+import { groupNotesByDateAndTag } from '@/utils/group-notes-by-date-and-tag';
 import { generateMessage, copyToClipboard, type ExportScope } from '@/services/export/message-export';
 import type { Note } from '@/models/note';
 import type { VisitMember } from '@/models/visit-member';
@@ -374,11 +374,19 @@ export class DashboardView extends LitElement {
   }
 
   private renderNotesList() {
-    const groupedNotes = groupNotesByDateAndWard(this.notes);
+    // Agrupar por data e tag (nova lógica S8A)
+    const groupedNotes = groupNotesByDateAndTag(this.notes);
+
+    // Adaptar estrutura de tags para wards (compatibilidade com componentes atuais)
+    // S8B criará componente específico para tags
+    const adaptedGroups = groupedNotes.map(group => ({
+      date: group.date,
+      wards: group.tags.map(t => ({ ward: t.tag, notes: t.notes })),
+    }));
 
     return html`
       <div class="d-flex flex-column gap-3" @note-click=${this.handleNoteClick}>
-        ${groupedNotes.map(
+        ${adaptedGroups.map(
           group => html`
             <date-group
               .date=${group.date}
