@@ -5,7 +5,7 @@
  * Regras:
  * - agrupar por data + tag
  * - nota com múltiplas tags aparece em múltiplos grupos (fan-out)
- * - ordenação: data desc, tag asc, notas createdAt desc
+ * - ordenação: data desc, tag asc, notas por leito (string asc)
  * - evitar duplicata da mesma nota no mesmo grupo
  */
 
@@ -29,7 +29,7 @@ export interface GroupedNotesByTag {
  * Ordenação:
  * - Datas: mais recentes primeiro (desc)
  * - Tags: ordem alfabética crescente (asc)
- * - Notas dentro de cada tag: mais recentes primeiro (por createdAt desc)
+ * - Notas dentro de cada tag: leito em ordem crescente (string asc)
  *
  * Regras de negócio:
  * - Nota com múltiplas tags aparece em todos os grupos de tag (fan-out)
@@ -80,14 +80,12 @@ export function groupNotesByDateAndTag(notes: Note[]): GroupedNotesByTag[] {
       }
     }
 
-    // Ordenar tags alfabeticamente (asc) e notas por createdAt (desc)
+    // Ordenar tags alfabeticamente (asc) e notas por leito (string asc)
     const sortedTags = Array.from(byTag.entries())
       .sort((a, b) => a[0].localeCompare(b[0])) // asc
       .map(([tag, tagNotes]) => ({
         tag,
-        notes: [...tagNotes].sort(
-          (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime() // desc
-        ),
+        notes: [...tagNotes].sort((a, b) => a.bed.localeCompare(b.bed)),
       }));
 
     if (sortedTags.length > 0) {

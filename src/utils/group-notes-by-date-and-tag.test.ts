@@ -116,34 +116,33 @@ describe('groupNotesByDateAndTag', () => {
     expect(result[0].tags[2].tag).toBe('UTI');
   });
 
-  it('notas dentro da tag ficam em ordem decrescente de createdAt', () => {
-    const now = Date.now();
+  it('notas dentro da tag ficam em ordem crescente por leito (string)', () => {
     const notes: Note[] = [
       createTestNote({
         id: '1',
         date: '2024-03-25',
         tags: ['UTI'],
-        createdAt: new Date(now - 2000),
+        bed: 'i04b',
       }),
       createTestNote({
         id: '2',
         date: '2024-03-25',
         tags: ['UTI'],
-        createdAt: new Date(now),
+        bed: 'i04d',
       }),
       createTestNote({
         id: '3',
         date: '2024-03-25',
         tags: ['UTI'],
-        createdAt: new Date(now - 1000),
+        bed: 'i04a',
       }),
     ];
 
     const result = groupNotesByDateAndTag(notes);
 
-    expect(result[0].tags[0].notes[0].id).toBe('2'); // mais recente
-    expect(result[0].tags[0].notes[1].id).toBe('3');
-    expect(result[0].tags[0].notes[2].id).toBe('1'); // mais antiga
+    expect(result[0].tags[0].notes[0].bed).toBe('i04a');
+    expect(result[0].tags[0].notes[1].bed).toBe('i04b');
+    expect(result[0].tags[0].notes[2].bed).toBe('i04d');
   });
 
   it('evita duplicar nota no mesmo grupo de tag', () => {
