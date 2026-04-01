@@ -67,7 +67,7 @@
 | S8A | DONE | Agrupamento dashboard por tags (TDD) | `docs/collab-slice8a-dashboard-group-by-tags-tdd-handoff-prompt.md` |
 | S8B | DONE | Componente de grupo por tag + actions | `docs/collab-slice8b-tag-group-component-actions-handoff-prompt.md` |
 | S9A | DONE | Exportação com mesmo critério do dashboard | `docs/collab-slice9a-export-by-tags-aligned-dashboard-handoff-prompt.md` |
-| S10 | TODO | Hardening final + limpeza | (gerar) |
+| S10 | DONE | Hardening final + limpeza | `docs/collab-slice10-hardening-final-cleanup-handoff-prompt.md` |
 
 ---
 
@@ -94,8 +94,9 @@
 - S8A: `a2b387f`
 - S8B: `52646e6`
 - S9A: `b26db22`
+- S10: `e3461dc`
 
-Estado atual validado localmente: typecheck/lint/test verdes (237 testes).
+Estado atual validado localmente: typecheck/lint/test verdes (226 testes).
 
 ---
 
