@@ -41,6 +41,10 @@ export class NewNoteView extends LitElement {
   @state() private tagsInput = '';
   @state() private tags: string[] = [];
 
+  // S13C: Estado inicial para detectar dirty
+  private initialState = { bed: '', reference: '', note: '', tags: [] as string[], tagsInput: '' };
+  @state() private isDiscardConfirmOpen = false;
+
   private get isEditMode(): boolean {
     return this.noteId !== null;
   }
@@ -104,6 +108,15 @@ export class NewNoteView extends LitElement {
         this.reference = existingNote.reference ?? '';
         this.note = existingNote.note;
         this.tags = existingNote.tags ?? [];
+
+        // S13C: guardar estado inicial para detectar dirty
+        this.initialState = {
+          bed: existingNote.bed,
+          reference: existingNote.reference ?? '',
+          note: existingNote.note,
+          tags: existingNote.tags ?? [],
+          tagsInput: '',
+        };
       } else {
         this.error = 'Nota não encontrada';
       }
@@ -214,7 +227,29 @@ export class NewNoteView extends LitElement {
     }
   };
 
+  private areTagsEqual = (left: string[], right: string[]): boolean => {
+    const leftSorted = [...left].sort();
+    const rightSorted = [...right].sort();
+    return JSON.stringify(leftSorted) === JSON.stringify(rightSorted);
+  };
+
+  private checkDirty = (): boolean => {
+    return (
+      this.bed !== this.initialState.bed ||
+      this.reference !== this.initialState.reference ||
+      this.note !== this.initialState.note ||
+      this.tagsInput !== this.initialState.tagsInput ||
+      !this.areTagsEqual(this.tags, this.initialState.tags)
+    );
+  };
+
   private handleCancel = () => {
+    // S13C: confirmar descarte se dirty
+    if (this.checkDirty()) {
+      this.isDiscardConfirmOpen = true;
+      return;
+    }
+
     if (this.visitId) {
       navigate(`/visita/${this.visitId}`);
     } else {
@@ -261,12 +296,34 @@ export class NewNoteView extends LitElement {
   };
 
   private handleBackClick = (): void => {
+    // S13C: confirmar descarte se dirty
+    if (this.checkDirty()) {
+      this.isDiscardConfirmOpen = true;
+      return;
+    }
+
     if (this.visitId) {
       navigate(`/visita/${this.visitId}`);
     } else {
       navigate('/dashboard');
     }
   };
+
+  // S13C: Handlers para o modal de descarte
+  private handleDiscardCancel = () => {
+    this.isDiscardConfirmOpen = false;
+  };
+
+  private handleDiscardConfirm = () => {
+    this.isDiscardConfirmOpen = false;
+    if (this.visitId) {
+      navigate(`/visita/${this.visitId}`);
+    } else {
+      navigate('/dashboard');
+    }
+  };
+
+
 
   override render() {
     // S12A: validação sem ward (tags-first)
@@ -466,6 +523,7 @@ export class NewNoteView extends LitElement {
       </div>
 
       ${this.renderDeleteConfirm()}
+      ${this.renderDiscardConfirm()}
     `;
   }
 
@@ -486,6 +544,33 @@ export class NewNoteView extends LitElement {
                 </button>
                 <button type="button" class="btn btn-danger" @click=${this.handleDeleteConfirm} ?disabled=${this.deleting}>
                   ${this.deleting ? 'Excluindo...' : 'Excluir'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  // S13C: Modal de confirmação de descarte
+  private renderDiscardConfirm() {
+    if (!this.isDiscardConfirmOpen) return null;
+
+    return html`
+      <div class="modal-backdrop fade show"></div>
+      <div class="modal d-block" tabindex="-1" @click=${this.handleDiscardCancel}>
+        <div class="modal-dialog modal-dialog-centered modal-sm" @click=${(e: Event) => { e.stopPropagation(); }}>
+          <div class="modal-content border-0 shadow">
+            <div class="modal-body p-4">
+              <h3 class="h6 mb-2">Descartar alterações?</h3>
+              <p class="text-secondary mb-3">As mudanças não salvas serão perdidas.</p>
+              <div class="d-grid gap-2 d-sm-flex justify-content-end">
+                <button type="button" class="btn btn-outline-secondary" @click=${this.handleDiscardCancel}>
+                  Continuar editando
+                </button>
+                <button type="button" class="btn btn-danger" @click=${this.handleDiscardConfirm}>
+                  Descartar e sair
                 </button>
               </div>
             </div>
