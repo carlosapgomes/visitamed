@@ -8,6 +8,7 @@ import { customElement, property, state } from 'lit/decorators.js';
 import { subscribeToAuth, signOutUser, type AuthState } from '@/services/auth/auth-service';
 import { navigate } from '@/router/router';
 import { getResolvedTheme, toggleTheme, type AppTheme } from '@/services/theme/theme-service';
+import { getSyncStatus, syncNow } from '@/services/sync/sync-service';
 import { config } from '@/config/env';
 
 interface BeforeInstallPromptEvent extends Event {
@@ -41,6 +42,8 @@ export class AppHeader extends LitElement {
   @state() private canInstallApp = false;
   @state() private canShowIosInstallHelp = false;
   @state() private canShowAndroidInstallHelp = false;
+  @state() private showSyncPendingModal = false;
+  @state() private isSyncingOnLogout = false;
 
   private unsubscribe: (() => void) | null = null;
   private deferredInstallPrompt: BeforeInstallPromptEvent | null = null;
@@ -201,12 +204,54 @@ export class AppHeader extends LitElement {
 
   private handleLogout = async (): Promise<void> => {
     this.showMenu = false;
+
+    // S14C: Verificar pendências de sync antes de logout
+    const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+    const syncStatus = getSyncStatus();
+
+    // Se online e há pendências, tentar sync primeiro
+    if (isOnline && syncStatus.pendingCount > 0) {
+      this.isSyncingOnLogout = true;
+      try {
+        await syncNow();
+      } catch (error) {
+        console.error('Erro ao sincronizar antes do logout:', error);
+      }
+      this.isSyncingOnLogout = false;
+
+      // Re-checar pendências após tentativa de sync
+      const updatedStatus = getSyncStatus();
+      if (updatedStatus.pendingCount > 0) {
+        // Ainda há pendências, abrir modal de confirmação
+        this.showSyncPendingModal = true;
+        return;
+      }
+    } else if (!isOnline && syncStatus.pendingCount > 0) {
+      // Offline com pendências, abrir modal direto
+      this.showSyncPendingModal = true;
+      return;
+    }
+
+    // Sem pendências ou sync concluído, prosseguir com logout
+    await this.performLogout();
+  };
+
+  private performLogout = async (): Promise<void> => {
     try {
       await signOutUser();
       navigate('/login', true);
     } catch (error) {
       console.error('Erro ao fazer logout:', error);
     }
+  };
+
+  private handleSyncPendingModalClose = (): void => {
+    this.showSyncPendingModal = false;
+  };
+
+  private handleForceLogout = async (): Promise<void> => {
+    this.showSyncPendingModal = false;
+    await this.performLogout();
   };
 
   private handleAvatarImageError = (e: Event): void => {
@@ -272,8 +317,8 @@ export class AppHeader extends LitElement {
               <h2 class="h6 mb-2">Instalar no iPhone</h2>
               <ol class="small text-secondary ps-3 mb-3">
                 <li>Toque no botão Compartilhar do Safari.</li>
-                <li>Selecione “Adicionar à Tela de Início”.</li>
-                <li>Confirme em “Adicionar”.</li>
+                <li>Selecione "Adicionar à Tela de Início".</li>
+                <li>Confirme em "Adicionar".</li>
               </ol>
               <div class="d-grid">
                 <button type="button" class="btn btn-outline-secondary" @click=${this.handleInstallHelpClose}>
@@ -299,12 +344,50 @@ export class AppHeader extends LitElement {
               <h2 class="h6 mb-2">Instalar no Android</h2>
               <ol class="small text-secondary ps-3 mb-3">
                 <li>Toque no menu do navegador (⋮).</li>
-                <li>Selecione “Instalar app” ou “Adicionar à tela inicial”.</li>
-                <li>Confirme em “Instalar”/“Adicionar”.</li>
+                <li>Selecione "Instalar app" ou "Adicionar à tela inicial".</li>
+                <li>Confirme em "Instalar"/"Adicionar".</li>
               </ol>
               <div class="d-grid">
                 <button type="button" class="btn btn-outline-secondary" @click=${this.handleAndroidInstallHelpClose}>
                   Entendi
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  private renderSyncPendingModal() {
+    if (!this.showSyncPendingModal) return null;
+
+    return html`
+      <div class="modal-backdrop fade show" @click=${this.handleSyncPendingModalClose}></div>
+      <div class="modal d-block" tabindex="-1" @click=${this.handleSyncPendingModalClose}>
+        <div class="modal-dialog modal-dialog-centered modal-sm" @click=${(e: Event) => { e.stopPropagation(); }}>
+          <div class="modal-content border-0 shadow">
+            <div class="modal-body p-4">
+              <h2 class="h6 mb-2">Existem itens pendentes de sincronização</h2>
+              <p class="text-secondary small mb-3">
+                Você tem alterações locais ainda não enviadas para a nuvem.
+                Se sair agora, essas alterações podem ser perdidas.
+              </p>
+              <div class="d-grid gap-2">
+                <button 
+                  type="button" 
+                  class="btn btn-primary" 
+                  @click=${this.handleSyncPendingModalClose}
+                  ?disabled=${this.isSyncingOnLogout}
+                >
+                  ${this.isSyncingOnLogout ? 'Sincronizando...' : 'Continuar sincronizando'}
+                </button>
+                <button 
+                  type="button" 
+                  class="btn btn-outline-danger" 
+                  @click=${this.handleForceLogout}
+                >
+                  Sair mesmo assim
                 </button>
               </div>
             </div>
@@ -427,6 +510,7 @@ export class AppHeader extends LitElement {
       ${this.renderAboutModal()}
       ${this.renderInstallHelpModal()}
       ${this.renderAndroidInstallHelpModal()}
+      ${this.renderSyncPendingModal()}
     `;
   }
 }
