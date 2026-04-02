@@ -45,6 +45,17 @@ export class NewNoteView extends LitElement {
   private initialState = { bed: '', reference: '', note: '', tags: [] as string[], tagsInput: '' };
   @state() private isDiscardConfirmOpen = false;
 
+  // S13D: Handler para beforeunload
+  private handleBeforeUnload = (event: BeforeUnloadEvent): void => {
+    const isDirty = this.checkDirty();
+    const isBusy = this.saving || this.deleting;
+
+    if (isDirty && !isBusy) {
+      event.preventDefault();
+      event.returnValue = '';
+    }
+  };
+
   private get isEditMode(): boolean {
     return this.noteId !== null;
   }
@@ -55,6 +66,9 @@ export class NewNoteView extends LitElement {
 
   override async connectedCallback(): Promise<void> {
     super.connectedCallback();
+
+    // S13D: registrar listener de beforeunload
+    window.addEventListener('beforeunload', this.handleBeforeUnload);
 
     // S12A: não carrega mais sugestões de alas (UI sem campo de ala)
     try {
@@ -307,6 +321,12 @@ export class NewNoteView extends LitElement {
     } else {
       navigate('/dashboard');
     }
+  };
+
+  // S13D: remover listener ao desmontar
+  override disconnectedCallback(): void {
+    super.disconnectedCallback();
+    window.removeEventListener('beforeunload', this.handleBeforeUnload);
   };
 
   // S13C: Handlers para o modal de descarte
