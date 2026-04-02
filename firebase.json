@@ -10,7 +10,13 @@
     "public": "dist",
     "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
     "rewrites": [
-      { "source": "/api/invites/accept", "function": "acceptInviteEndpoint" },
+      {
+        "source": "/api/invites/accept",
+        "function": {
+          "functionId": "acceptInviteEndpoint",
+          "region": "southamerica-east1"
+        }
+      },
       { "source": "**", "destination": "/index.html" }
     ]
   }
