@@ -4,14 +4,25 @@
  * S11B: create/list/revoke migrados para Firestore remoto
  */
 
-import { db } from './dexie-db';
 import { doc, collection, setDoc, getDoc, getDocs, updateDoc, Timestamp, type Firestore } from 'firebase/firestore';
 import { getFirebaseFirestore } from '@/services/auth/firebase';
 import { createVisitInvite, isInviteActive, revokeInvite, type VisitInvite, type InviteRole, type CreateVisitInviteInput } from '@/models/visit-invite';
-import { createVisitMember, type VisitMember } from '@/models/visit-member';
 import { getAuthState } from '@/services/auth/auth-service';
-import { getVisitMember, getCurrentUserVisitMember } from './visit-members-service';
+import { getCurrentUserVisitMember } from './visit-members-service';
 import { canManageInvites } from '@/services/auth/visit-permissions';
+
+/**
+ * Erros do protocolo HTTP
+ */
+export class InviteAcceptError extends Error {
+  constructor(
+    message: string,
+    public code: 'unauthenticated' | 'invalid-request' | 'method-not-allowed' | 'internal-error'
+  ) {
+    super(message);
+    this.name = 'InviteAcceptError';
+  }
+}
 
 /**
  * Obtém o ID do usuário atual ou lança erro se não autenticado
@@ -168,13 +179,6 @@ export async function listActiveVisitInvites(visitId: string): Promise<VisitInvi
 }
 
 /**
- * Busca um convite pelo token
- */
-export async function findInviteByToken(token: string): Promise<VisitInvite | undefined> {
-  return db.visitInvites.where('token').equals(token).first();
-}
-
-/**
  * Input para revogação de convite via serviço
  */
 export interface RevokeVisitInviteInput {
@@ -237,50 +241,75 @@ export interface AcceptInviteResult {
 }
 
 /**
- * Aceita um convite por token
- * Cria membership ativo quando válido
- * Convite é de uso múltiplo (não é deletado após aceite)
+ * Aceita um convite por token via endpoint remoto
+ * Usa POST /api/invites/accept com Bearer Firebase ID token
  */
 export async function acceptVisitInviteByToken(token: string): Promise<AcceptInviteResult> {
-  const userId = requireUserId();
-  const now = new Date();
+  const { user } = getAuthState();
 
-  // 1. Busca convite por token
-  const invite = await findInviteByToken(token);
-
-  // 2. Valida convite
-  if (!invite) {
-    return { status: 'invite-not-found' };
+  if (!user) {
+    throw new InviteAcceptError('Usuário não autenticado.', 'unauthenticated');
   }
 
-  if (invite.revokedAt) {
-    return { status: 'invite-revoked', visitId: invite.visitId };
+  // Obtém Firebase ID token para autenticação
+  const idToken = await user.getIdToken();
+
+  const response = await fetch('/api/invites/accept', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${idToken}`,
+    },
+    body: JSON.stringify({ token }),
+  });
+
+  // Tratamento de erros de protocolo HTTP
+  if (response.status === 401) {
+    throw new InviteAcceptError('Usuário não autenticado.', 'unauthenticated');
   }
 
-  if (isInviteActive(invite, now)) {
-    // ainda ativo, mas precisa verificar expiração
-    const expiresAt = new Date(invite.expiresAt);
-    if (now > expiresAt) {
-      return { status: 'invite-expired', visitId: invite.visitId };
-    }
-  } else {
-    return { status: 'invite-expired', visitId: invite.visitId };
+  if (response.status === 400) {
+    throw new InviteAcceptError('Requisição inválida.', 'invalid-request');
   }
 
-  // 3. Verifica membership atual
-  const existingMember = await getVisitMember(invite.visitId, userId);
-
-  if (existingMember) {
-    if (existingMember.status === 'active') {
-      return { status: 'already-member', visitId: invite.visitId };
-    }
-    // status === 'removed'
-    return { status: 'access-revoked', visitId: invite.visitId };
+  if (response.status === 405) {
+    throw new InviteAcceptError('Método não permitido.', 'method-not-allowed');
   }
 
-  // 4. Cria membership ativo com role do convite
-  const newMember: VisitMember = createVisitMember(invite.visitId, userId, invite.role);
-  await db.visitMembers.put(newMember);
+  if (response.status >= 500) {
+    throw new InviteAcceptError('Erro no servidor. Tente novamente mais tarde.', 'internal-error');
+  }
 
-  return { status: 'accepted', visitId: invite.visitId };
+  // Parseia resposta do backend
+  const result: unknown = await response.json();
+
+  // Valida formato da resposta
+  if (!result || typeof result !== 'object') {
+    throw new InviteAcceptError('Resposta inválida do servidor.', 'internal-error');
+  }
+
+  const resultObj = result as Record<string, unknown>;
+  if (typeof resultObj['status'] !== 'string') {
+    throw new InviteAcceptError('Resposta inválida do servidor.', 'internal-error');
+  }
+
+  // Valida status retornado é um dos esperados
+  const validStatuses: AcceptInviteStatus[] = [
+    'accepted',
+    'already-member',
+    'invite-not-found',
+    'invite-expired',
+    'invite-revoked',
+    'access-revoked',
+  ];
+
+  if (!validStatuses.includes(resultObj['status'] as AcceptInviteStatus)) {
+    throw new InviteAcceptError('Status de convite inválido.', 'internal-error');
+  }
+
+  // Retorna resultado mapeado
+  return {
+    status: resultObj['status'] as AcceptInviteStatus,
+    visitId: resultObj['visitId'] as string | undefined,
+  };
 }

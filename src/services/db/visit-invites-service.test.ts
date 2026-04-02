@@ -2,7 +2,7 @@
  * Testes para visit-invites-service (S11B - Firestore remoto)
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 // Mock do Firebase Firestore
 vi.mock('firebase/firestore', () => ({
@@ -54,12 +54,19 @@ vi.mock('@/services/auth/firebase', () => ({
   getFirebaseFirestore: vi.fn(() => ({})),
 }));
 
+interface MockUserType {
+  uid: string;
+  getIdToken: ReturnType<typeof vi.fn>;
+}
+
+const mockAuthState: { user: MockUserType | null; loading: boolean; error: string | null } = {
+  user: { uid: 'user-123', getIdToken: vi.fn().mockResolvedValue('mock-id-token') },
+  loading: false,
+  error: null,
+};
+
 vi.mock('@/services/auth/auth-service', () => ({
-  getAuthState: vi.fn(() => ({
-    user: { uid: 'user-123' },
-    loading: false,
-    error: null,
-  })),
+  getAuthState: vi.fn(() => mockAuthState),
 }));
 
 vi.mock('./visit-members-service', () => ({
@@ -102,10 +109,7 @@ import {
   revokeVisitInvite,
   acceptVisitInviteByToken,
 } from './visit-invites-service';
-import { createVisitInvite } from '@/models/visit-invite';
-import { createVisitMember, type VisitMember } from '@/models/visit-member';
 import { getFirebaseFirestore } from '@/services/auth/firebase';
-import { getVisitMember } from './visit-members-service';
 import { db } from './dexie-db';
 
 describe('visit-invites-service - createVisitInviteForVisit (Firestore remoto)', () => {
@@ -242,13 +246,29 @@ describe('visit-invites-service - revokeVisitInvite (Firestore remoto)', () => {
   });
 });
 
-// Testes de acceptVisitInviteByToken mantidos como estão (fluxo transitório local/Dexie)
-describe('visit-invites-service - acceptVisitInviteByToken (local/Dexie)', () => {
+// Testes de acceptVisitInviteByToken usando mock de fetch (endpoint remoto)
+describe('visit-invites-service - acceptVisitInviteByToken (endpoint remoto)', () => {
+  let fetchMock: ReturnType<typeof vi.fn>;
+
   beforeEach(() => {
     vi.clearAllMocks();
+    fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock as unknown as typeof fetch);
+
+    // Reset mockAuthState to have user
+    mockAuthState.user = { uid: 'user-123', getIdToken: vi.fn().mockResolvedValue('mock-id-token') };
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it('retorna invite-not-found quando token não existe', async () => {
+    fetchMock.mockResolvedValueOnce({
+      status: 200,
+      json: () => Promise.resolve({ status: 'invite-not-found' }),
+    } as never);
+
     const result = await acceptVisitInviteByToken('non-existent-token');
 
     expect(result.status).toBe('invite-not-found');
@@ -256,127 +276,111 @@ describe('visit-invites-service - acceptVisitInviteByToken (local/Dexie)', () =>
   });
 
   it('retorna invite-revoked quando convite foi revogado', async () => {
-    const invite = createVisitInvite({ visitId: 'visit-1', createdByUserId: 'u1', role: 'editor' });
-    invite.revokedAt = new Date();
-
-    const mockFirst = vi.fn().mockResolvedValue(invite);
-    (db.visitInvites.where as ReturnType<typeof vi.fn>).mockReturnValue({
-      equals: vi.fn().mockReturnValue({
-        toArray: vi.fn(),
-        first: mockFirst,
-      }),
+    fetchMock.mockResolvedValueOnce({
+      status: 200,
+      json: () => Promise.resolve({ status: 'invite-revoked', visitId: 'visit-1' }),
     } as never);
 
-    const result = await acceptVisitInviteByToken(invite.token);
+    const result = await acceptVisitInviteByToken('some-token');
 
     expect(result.status).toBe('invite-revoked');
     expect(result.visitId).toBe('visit-1');
   });
 
   it('retorna invite-expired quando convite expirou', async () => {
-    const invite = createVisitInvite({ visitId: 'visit-1', createdByUserId: 'u1', role: 'editor', expiresInHours: -1 });
-
-    const mockFirst = vi.fn().mockResolvedValue(invite);
-    (db.visitInvites.where as ReturnType<typeof vi.fn>).mockReturnValue({
-      equals: vi.fn().mockReturnValue({
-        toArray: vi.fn(),
-        first: mockFirst,
-      }),
+    fetchMock.mockResolvedValueOnce({
+      status: 200,
+      json: () => Promise.resolve({ status: 'invite-expired', visitId: 'visit-1' }),
     } as never);
 
-    const result = await acceptVisitInviteByToken(invite.token);
+    const result = await acceptVisitInviteByToken('expired-token');
 
     expect(result.status).toBe('invite-expired');
     expect(result.visitId).toBe('visit-1');
   });
 
   it('retorna already-member quando membership já está ativo', async () => {
-    const invite = createVisitInvite({ visitId: 'visit-1', createdByUserId: 'u1', role: 'editor' });
-
-    const mockFirst = vi.fn().mockResolvedValue(invite);
-    (db.visitInvites.where as ReturnType<typeof vi.fn>).mockReturnValue({
-      equals: vi.fn().mockReturnValue({
-        toArray: vi.fn(),
-        first: mockFirst,
-      }),
+    fetchMock.mockResolvedValueOnce({
+      status: 200,
+      json: () => Promise.resolve({ status: 'already-member', visitId: 'visit-1' }),
     } as never);
 
-    const existingMember: VisitMember = createVisitMember('visit-1', 'user-123', 'editor');
-    vi.mocked(getVisitMember).mockResolvedValue(existingMember);
-
-    const result = await acceptVisitInviteByToken(invite.token);
+    const result = await acceptVisitInviteByToken('some-token');
 
     expect(result.status).toBe('already-member');
     expect(result.visitId).toBe('visit-1');
   });
 
   it('retorna access-revoked quando membership existente foi removido', async () => {
-    const invite = createVisitInvite({ visitId: 'visit-1', createdByUserId: 'u1', role: 'editor' });
-
-    const mockFirst = vi.fn().mockResolvedValue(invite);
-    (db.visitInvites.where as ReturnType<typeof vi.fn>).mockReturnValue({
-      equals: vi.fn().mockReturnValue({
-        toArray: vi.fn(),
-        first: mockFirst,
-      }),
+    fetchMock.mockResolvedValueOnce({
+      status: 200,
+      json: () => Promise.resolve({ status: 'access-revoked', visitId: 'visit-1' }),
     } as never);
 
-    const existingMember: VisitMember = createVisitMember('visit-1', 'user-123', 'editor');
-    existingMember.status = 'removed';
-    existingMember.removedAt = new Date();
-    vi.mocked(getVisitMember).mockResolvedValue(existingMember);
-
-    const result = await acceptVisitInviteByToken(invite.token);
+    const result = await acceptVisitInviteByToken('some-token');
 
     expect(result.status).toBe('access-revoked');
     expect(result.visitId).toBe('visit-1');
   });
 
-  it('retorna accepted e cria membership quando convite é válido', async () => {
-    const invite = createVisitInvite({ visitId: 'visit-1', createdByUserId: 'u1', role: 'editor' });
-
-    const mockFirst = vi.fn().mockResolvedValue(invite);
-    (db.visitInvites.where as ReturnType<typeof vi.fn>).mockReturnValue({
-      equals: vi.fn().mockReturnValue({
-        toArray: vi.fn(),
-        first: mockFirst,
-      }),
+  it('retorna accepted quando convite é válido', async () => {
+    fetchMock.mockResolvedValueOnce({
+      status: 200,
+      json: () => Promise.resolve({ status: 'accepted', visitId: 'visit-1' }),
     } as never);
 
-    vi.mocked(getVisitMember).mockResolvedValue(undefined);
-
-    const result = await acceptVisitInviteByToken(invite.token);
+    const result = await acceptVisitInviteByToken('valid-token');
 
     expect(result.status).toBe('accepted');
     expect(result.visitId).toBe('visit-1');
-
-    // eslint-disable-next-line @typescript-eslint/unbound-method
-    expect(db.visitMembers.put).toHaveBeenCalled();
-    const memberArg = (db.visitMembers.put as ReturnType<typeof vi.fn>).mock.calls[0][0] as VisitMember;
-    expect(memberArg.visitId).toBe('visit-1');
-    expect(memberArg.userId).toBe('user-123');
-    expect(memberArg.role).toBe('editor');
-    expect(memberArg.status).toBe('active');
   });
 
-  it('cria membership com role viewer quando convite tem role viewer', async () => {
-    const invite = createVisitInvite({ visitId: 'visit-1', createdByUserId: 'u1', role: 'viewer' });
+  it('lança erro quando usuário não autenticado localmente', async () => {
+    mockAuthState.user = null;
 
-    const mockFirst = vi.fn().mockResolvedValue(invite);
-    (db.visitInvites.where as ReturnType<typeof vi.fn>).mockReturnValue({
-      equals: vi.fn().mockReturnValue({
-        toArray: vi.fn(),
-        first: mockFirst,
-      }),
+    await expect(acceptVisitInviteByToken('token')).rejects.toThrow('Usuário não autenticado.');
+  });
+
+  it('lança erro quando endpoint retorna 401', async () => {
+    fetchMock.mockResolvedValueOnce({
+      status: 401,
     } as never);
 
-    vi.mocked(getVisitMember).mockResolvedValue(undefined);
+    await expect(acceptVisitInviteByToken('token')).rejects.toThrow('Usuário não autenticado.');
+  });
 
-    const result = await acceptVisitInviteByToken(invite.token);
+  it('lança erro quando resposta HTTP é 500', async () => {
+    fetchMock.mockResolvedValueOnce({
+      status: 500,
+    } as never);
 
-    expect(result.status).toBe('accepted');
+    await expect(acceptVisitInviteByToken('token')).rejects.toThrow('Erro no servidor. Tente novamente mais tarde.');
+  });
 
-    const memberArg = (db.visitMembers.put as ReturnType<typeof vi.fn>).mock.calls[0][0] as VisitMember;
-    expect(memberArg.role).toBe('viewer');
+  it('lança erro quando payload de resposta é inválido', async () => {
+    fetchMock.mockResolvedValueOnce({
+      status: 200,
+      json: () => Promise.resolve({ status: 'invalid-status' }),
+    } as never);
+
+    await expect(acceptVisitInviteByToken('token')).rejects.toThrow('Status de convite inválido.');
+  });
+
+  it('envia token no body e Authorization header corretamente', async () => {
+    fetchMock.mockResolvedValueOnce({
+      status: 200,
+      json: () => Promise.resolve({ status: 'accepted', visitId: 'visit-1' }),
+    } as never);
+
+    await acceptVisitInviteByToken('test-token-123');
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/invites/accept', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: 'Bearer mock-id-token',
+      },
+      body: JSON.stringify({ token: 'test-token-123' }),
+    });
   });
 });
