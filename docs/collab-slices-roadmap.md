@@ -84,6 +84,7 @@
 | S14B | DONE | Push de visita + membership owner via fila de sync (criação/duplicação) | `docs/collab-slice14b-push-visit-owner-membership-sync-queue-handoff-prompt.md` |
 | S14C | DONE | Guard de logout com pendências de sync (evitar perda silenciosa) | `docs/collab-slice14c-logout-sync-pending-guard-handoff-prompt.md` |
 | S14D | DONE | Hotfix sync de notas: serializar timestamps corretamente para Firestore rules | `docs/collab-slice14d-note-sync-timestamp-serialization-hotfix-handoff-prompt.md` |
+| S15A | TODO | Sync imediato pós-write online + pipeline completo no ciclo automático | `docs/collab-slice15a-sync-imediato-pos-write-online-handoff-prompt.md` |
 
 ---
 
