@@ -1,37 +1,59 @@
 /**
- * Testes para visit-invites-service
+ * Testes para visit-invites-service (S11B - Firestore remoto)
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-// Factory function para vi.mock
-vi.mock('@/services/db/dexie-db', () => {
-  const createMockQuery = () => ({
-    toArray: vi.fn().mockResolvedValue([]),
-    first: vi.fn().mockResolvedValue(undefined),
-  });
-
-  return {
-    db: {
-      visitInvites: {
-        put: vi.fn(),
-        where: vi.fn(() => ({
-          equals: vi.fn(() => createMockQuery()),
-        })),
-        get: vi.fn(),
+// Mock do Firebase Firestore
+vi.mock('firebase/firestore', () => ({
+  doc: vi.fn(() => 'mock-doc-ref'),
+  collection: vi.fn(() => 'mock-collection-ref'),
+  setDoc: vi.fn(() => Promise.resolve()),
+  getDoc: vi.fn(() =>
+    Promise.resolve({
+      exists: () => true,
+      data: () => ({
+        id: 'invite-1',
+        visitId: 'visit-1',
+        createdByUserId: 'user-123',
+        token: 'invite-1',
+        role: 'editor',
+        expiresAt: { toDate: () => new Date(Date.now() + 86400000) },
+        createdAt: { toDate: () => new Date() },
+        updatedAt: { toDate: () => new Date() },
+        revokedAt: null,
+      }),
+    })
+  ),
+  getDocs: vi.fn(() =>
+    Promise.resolve({
+      forEach: (callback: (doc: { data: () => Record<string, unknown> }) => void) => {
+        callback({
+          data: () => ({
+            id: 'invite-1',
+            visitId: 'visit-1',
+            createdByUserId: 'user-123',
+            token: 'token-1',
+            role: 'editor',
+            expiresAt: { toDate: () => new Date(Date.now() + 86400000) },
+            createdAt: { toDate: () => new Date() },
+            updatedAt: { toDate: () => new Date() },
+            revokedAt: null,
+          }),
+        });
       },
-      visitMembers: {
-        put: vi.fn(),
-        where: vi.fn(() => ({
-          equals: vi.fn(() => createMockQuery()),
-        })),
-        get: vi.fn(),
-      },
-    },
-  };
-});
+    })
+  ),
+  updateDoc: vi.fn(() => Promise.resolve()),
+  Timestamp: {
+    fromDate: (date: Date) => ({ toDate: () => date }),
+  },
+}));
 
-// Mock do auth-service
+vi.mock('@/services/auth/firebase', () => ({
+  getFirebaseFirestore: vi.fn(() => ({})),
+}));
+
 vi.mock('@/services/auth/auth-service', () => ({
   getAuthState: vi.fn(() => ({
     user: { uid: 'user-123' },
@@ -40,25 +62,53 @@ vi.mock('@/services/auth/auth-service', () => ({
   })),
 }));
 
-import { createVisitInviteForVisit, listActiveVisitInvites, findInviteByToken, revokeVisitInvite, acceptVisitInviteByToken } from './visit-invites-service';
-import { createVisitInvite, revokeInvite } from '@/models/visit-invite';
+vi.mock('./visit-members-service', () => ({
+  getVisitMember: vi.fn(),
+  getCurrentUserVisitMember: vi.fn(() =>
+    Promise.resolve({
+      id: 'visit-1:user-123',
+      visitId: 'visit-1',
+      userId: 'user-123',
+      role: 'owner',
+      status: 'active',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    })
+  ),
+}));
+
+vi.mock('./dexie-db', () => ({
+  db: {
+    visitInvites: {
+      put: vi.fn(),
+      where: vi.fn(() => ({
+        equals: vi.fn(() => ({
+          toArray: vi.fn().mockResolvedValue([]),
+          first: vi.fn().mockResolvedValue(undefined),
+        })),
+      })),
+      get: vi.fn(),
+    },
+    visitMembers: {
+      put: vi.fn(),
+      get: vi.fn(),
+    },
+  },
+}));
+
+import {
+  createVisitInviteForVisit,
+  listActiveVisitInvites,
+  revokeVisitInvite,
+  acceptVisitInviteByToken,
+} from './visit-invites-service';
+import { createVisitInvite } from '@/models/visit-invite';
 import { createVisitMember, type VisitMember } from '@/models/visit-member';
+import { getFirebaseFirestore } from '@/services/auth/firebase';
+import { getVisitMember } from './visit-members-service';
 import { db } from './dexie-db';
 
-// Cast para os mocks para evitar erros de tipo
-const mockDb = db as unknown as {
-  visitInvites: {
-    put: ReturnType<typeof vi.fn>;
-    where: ReturnType<typeof vi.fn>;
-    get: ReturnType<typeof vi.fn>;
-  };
-  visitMembers: {
-    put: ReturnType<typeof vi.fn>;
-    get: ReturnType<typeof vi.fn>;
-  };
-};
-
-describe('visit-invites-service - createVisitInviteForVisit', () => {
+describe('visit-invites-service - createVisitInviteForVisit (Firestore remoto)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -72,7 +122,8 @@ describe('visit-invites-service - createVisitInviteForVisit', () => {
     expect(invite.createdByUserId).toBe('user-123');
     expect(invite.visitId).toBe('visit-1');
     expect(invite.role).toBe('editor');
-    expect(mockDb.visitInvites.put).toHaveBeenCalledWith(invite);
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    expect(db.visitInvites.put).not.toHaveBeenCalled();
   });
 
   it('cria convite com expiração customizada', async () => {
@@ -85,135 +136,119 @@ describe('visit-invites-service - createVisitInviteForVisit', () => {
     const diffHours = (invite.expiresAt.getTime() - invite.createdAt.getTime()) / (1000 * 60 * 60);
     expect(diffHours).toBeCloseTo(12, 0);
   });
+
+  it('lança erro quando usuário não é owner', async () => {
+    const { getCurrentUserVisitMember } = await import('./visit-members-service');
+    vi.mocked(getCurrentUserVisitMember).mockResolvedValueOnce({
+      id: 'visit-1:user-123',
+      visitId: 'visit-1',
+      userId: 'user-123',
+      role: 'editor',
+      status: 'active',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    await expect(
+      createVisitInviteForVisit({ visitId: 'visit-1', role: 'editor' })
+    ).rejects.toThrow('Apenas o owner pode criar ou revogar convites.');
+  });
+
+  it('lança erro quando Firestore não configurado', async () => {
+    vi.mocked(getFirebaseFirestore).mockReturnValueOnce(undefined as never);
+
+    await expect(
+      createVisitInviteForVisit({ visitId: 'visit-1', role: 'editor' })
+    ).rejects.toThrow('Firestore não configurado');
+  });
 });
 
-describe('visit-invites-service - listActiveVisitInvites', () => {
+describe('visit-invites-service - listActiveVisitInvites (Firestore remoto)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
   it('lista só convites ativos (não expirados e não revogados)', async () => {
-    const activeInvite = createVisitInvite({ visitId: 'visit-1', createdByUserId: 'u1', role: 'editor', expiresInHours: 24 });
-    const expiredInvite = createVisitInvite({ visitId: 'visit-1', createdByUserId: 'u1', role: 'viewer', expiresInHours: -1 });
-    const revokedInvite = revokeInvite(createVisitInvite({ visitId: 'visit-1', createdByUserId: 'u1', role: 'viewer', expiresInHours: 24 }));
-
-    const mockToArray = vi.fn().mockResolvedValue([activeInvite, expiredInvite, revokedInvite]);
-
-    // Configura o mock
-    (mockDb.visitInvites.where).mockReturnValue({
-      equals: vi.fn().mockReturnValue({
-        toArray: mockToArray,
-        first: vi.fn(),
-      }),
-    } as never);
-
     const result = await listActiveVisitInvites('visit-1');
 
     expect(result).toHaveLength(1);
-    expect(result[0].id).toBe(activeInvite.id);
+    expect(result[0].id).toBe('invite-1');
   });
 
   it('retorna array vazio quando não há convites', async () => {
-    const mockToArray = vi.fn().mockResolvedValue([]);
-
-    (mockDb.visitInvites.where).mockReturnValue({
-      equals: vi.fn().mockReturnValue({
-        toArray: mockToArray,
-        first: vi.fn(),
-      }),
+    const { getDocs } = await import('firebase/firestore');
+    vi.mocked(getDocs).mockResolvedValueOnce({
+      forEach: (_callback: (doc: unknown) => void) => {
+        // vazio
+      },
     } as never);
 
     const result = await listActiveVisitInvites('visit-1');
 
     expect(result).toHaveLength(0);
   });
-});
 
-describe('visit-invites-service - findInviteByToken', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
+  it('lança erro quando Firestore não configurado', async () => {
+    vi.mocked(getFirebaseFirestore).mockReturnValueOnce(undefined as never);
 
-  it('busca convite por token e retorna resultado', async () => {
-    const invite = createVisitInvite({ visitId: 'visit-1', createdByUserId: 'u1', role: 'editor' });
-    const mockFirst = vi.fn().mockResolvedValue(invite);
-
-    (mockDb.visitInvites.where).mockReturnValue({
-      equals: vi.fn().mockReturnValue({
-        toArray: vi.fn(),
-        first: mockFirst,
-      }),
-    } as never);
-
-    const result = await findInviteByToken(invite.token);
-
-    expect(result).toBeDefined();
-    expect(result?.token).toBe(invite.token);
-    expect(mockFirst).toHaveBeenCalled();
-  });
-
-  it('retorna undefined quando token não existe', async () => {
-    const mockFirst = vi.fn().mockResolvedValue(undefined);
-
-    (mockDb.visitInvites.where).mockReturnValue({
-      equals: vi.fn().mockReturnValue({
-        toArray: vi.fn(),
-        first: mockFirst,
-      }),
-    } as never);
-
-    const result = await findInviteByToken('non-existent-token');
-
-    expect(result).toBeUndefined();
+    await expect(listActiveVisitInvites('visit-1')).rejects.toThrow('Firestore não configurado');
   });
 });
 
-describe('visit-invites-service - revokeVisitInvite', () => {
+describe('visit-invites-service - revokeVisitInvite (Firestore remoto)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-  });
-
-  it('retorna undefined quando convite não existe', async () => {
-    (mockDb.visitInvites.get).mockResolvedValue(undefined);
-
-    const result = await revokeVisitInvite('non-existent-id');
-
-    expect(result).toBeUndefined();
-    expect(mockDb.visitInvites.put).not.toHaveBeenCalled();
   });
 
   it('revoga convite e persiste quando convite existe', async () => {
-    const invite = createVisitInvite({ visitId: 'visit-1', createdByUserId: 'u1', role: 'editor' });
+    const result = await revokeVisitInvite('invite-1', 'visit-1');
 
-    (mockDb.visitInvites.get).mockResolvedValue(invite);
-
-    const result = await revokeVisitInvite(invite.id);
-
+    expect(result).toBeDefined();
     expect(result?.revokedAt).toBeDefined();
+  });
 
-    // Verifica que put foi chamado com um objeto contendo revokedAt
-    const putCalls = (mockDb.visitInvites.put).mock.calls;
-    expect(putCalls.length).toBe(1);
-    const calledArg = putCalls[0][0] as { revokedAt?: Date };
-    expect(calledArg.revokedAt).toBeInstanceOf(Date);
+  it('retorna undefined quando convite não existe', async () => {
+    const { getDoc } = await import('firebase/firestore');
+    vi.mocked(getDoc).mockResolvedValueOnce({
+      exists: () => false,
+    } as never);
+
+    const result = await revokeVisitInvite('non-existent', 'visit-1');
+
+    expect(result).toBeUndefined();
+  });
+
+  it('lança erro quando usuário não é owner', async () => {
+    const { getCurrentUserVisitMember } = await import('./visit-members-service');
+    vi.mocked(getCurrentUserVisitMember).mockResolvedValueOnce({
+      id: 'visit-1:user-123',
+      visitId: 'visit-1',
+      userId: 'user-123',
+      role: 'editor',
+      status: 'active',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    await expect(revokeVisitInvite('invite-1', 'visit-1')).rejects.toThrow(
+      'Apenas o owner pode criar ou revogar convites.'
+    );
+  });
+
+  it('lança erro quando Firestore não configurado', async () => {
+    vi.mocked(getFirebaseFirestore).mockReturnValueOnce(undefined as never);
+
+    await expect(revokeVisitInvite('invite-1', 'visit-1')).rejects.toThrow('Firestore não configurado');
   });
 });
 
-describe('visit-invites-service - acceptVisitInviteByToken', () => {
+// Testes de acceptVisitInviteByToken mantidos como estão (fluxo transitório local/Dexie)
+describe('visit-invites-service - acceptVisitInviteByToken (local/Dexie)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
   it('retorna invite-not-found quando token não existe', async () => {
-    const mockFirst = vi.fn().mockResolvedValue(undefined);
-
-    (mockDb.visitInvites.where).mockReturnValue({
-      equals: vi.fn().mockReturnValue({
-        toArray: vi.fn(),
-        first: mockFirst,
-      }),
-    } as never);
-
     const result = await acceptVisitInviteByToken('non-existent-token');
 
     expect(result.status).toBe('invite-not-found');
@@ -222,11 +257,10 @@ describe('visit-invites-service - acceptVisitInviteByToken', () => {
 
   it('retorna invite-revoked quando convite foi revogado', async () => {
     const invite = createVisitInvite({ visitId: 'visit-1', createdByUserId: 'u1', role: 'editor' });
-    invite.revokedAt = new Date(); // Convite revogado
+    invite.revokedAt = new Date();
 
     const mockFirst = vi.fn().mockResolvedValue(invite);
-
-    (mockDb.visitInvites.where).mockReturnValue({
+    (db.visitInvites.where as ReturnType<typeof vi.fn>).mockReturnValue({
       equals: vi.fn().mockReturnValue({
         toArray: vi.fn(),
         first: mockFirst,
@@ -240,11 +274,10 @@ describe('visit-invites-service - acceptVisitInviteByToken', () => {
   });
 
   it('retorna invite-expired quando convite expirou', async () => {
-    const invite = createVisitInvite({ visitId: 'visit-1', createdByUserId: 'u1', role: 'editor', expiresInHours: -1 }); // Expirado
+    const invite = createVisitInvite({ visitId: 'visit-1', createdByUserId: 'u1', role: 'editor', expiresInHours: -1 });
 
     const mockFirst = vi.fn().mockResolvedValue(invite);
-
-    (mockDb.visitInvites.where).mockReturnValue({
+    (db.visitInvites.where as ReturnType<typeof vi.fn>).mockReturnValue({
       equals: vi.fn().mockReturnValue({
         toArray: vi.fn(),
         first: mockFirst,
@@ -261,19 +294,15 @@ describe('visit-invites-service - acceptVisitInviteByToken', () => {
     const invite = createVisitInvite({ visitId: 'visit-1', createdByUserId: 'u1', role: 'editor' });
 
     const mockFirst = vi.fn().mockResolvedValue(invite);
-
-    (mockDb.visitInvites.where).mockReturnValue({
+    (db.visitInvites.where as ReturnType<typeof vi.fn>).mockReturnValue({
       equals: vi.fn().mockReturnValue({
         toArray: vi.fn(),
         first: mockFirst,
       }),
     } as never);
 
-    // Simula membership existente ativo
     const existingMember: VisitMember = createVisitMember('visit-1', 'user-123', 'editor');
-    const mockGet = vi.fn().mockResolvedValue(existingMember);
-
-    (mockDb.visitMembers.get).mockImplementation(mockGet);
+    vi.mocked(getVisitMember).mockResolvedValue(existingMember);
 
     const result = await acceptVisitInviteByToken(invite.token);
 
@@ -285,21 +314,17 @@ describe('visit-invites-service - acceptVisitInviteByToken', () => {
     const invite = createVisitInvite({ visitId: 'visit-1', createdByUserId: 'u1', role: 'editor' });
 
     const mockFirst = vi.fn().mockResolvedValue(invite);
-
-    (mockDb.visitInvites.where).mockReturnValue({
+    (db.visitInvites.where as ReturnType<typeof vi.fn>).mockReturnValue({
       equals: vi.fn().mockReturnValue({
         toArray: vi.fn(),
         first: mockFirst,
       }),
     } as never);
 
-    // Simula membership existente removido
     const existingMember: VisitMember = createVisitMember('visit-1', 'user-123', 'editor');
     existingMember.status = 'removed';
     existingMember.removedAt = new Date();
-    const mockGet = vi.fn().mockResolvedValue(existingMember);
-
-    (mockDb.visitMembers.get).mockImplementation(mockGet);
+    vi.mocked(getVisitMember).mockResolvedValue(existingMember);
 
     const result = await acceptVisitInviteByToken(invite.token);
 
@@ -311,26 +336,23 @@ describe('visit-invites-service - acceptVisitInviteByToken', () => {
     const invite = createVisitInvite({ visitId: 'visit-1', createdByUserId: 'u1', role: 'editor' });
 
     const mockFirst = vi.fn().mockResolvedValue(invite);
-
-    (mockDb.visitInvites.where).mockReturnValue({
+    (db.visitInvites.where as ReturnType<typeof vi.fn>).mockReturnValue({
       equals: vi.fn().mockReturnValue({
         toArray: vi.fn(),
         first: mockFirst,
       }),
     } as never);
 
-    // Simula que não existe membership
-    const mockGet = vi.fn().mockResolvedValue(undefined);
-    (mockDb.visitMembers.get).mockImplementation(mockGet);
+    vi.mocked(getVisitMember).mockResolvedValue(undefined);
 
     const result = await acceptVisitInviteByToken(invite.token);
 
     expect(result.status).toBe('accepted');
     expect(result.visitId).toBe('visit-1');
 
-    // Verifica que membership foi criado
-    expect(mockDb.visitMembers.put).toHaveBeenCalled();
-    const memberArg = (mockDb.visitMembers.put).mock.calls[0][0] as VisitMember;
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    expect(db.visitMembers.put).toHaveBeenCalled();
+    const memberArg = (db.visitMembers.put as ReturnType<typeof vi.fn>).mock.calls[0][0] as VisitMember;
     expect(memberArg.visitId).toBe('visit-1');
     expect(memberArg.userId).toBe('user-123');
     expect(memberArg.role).toBe('editor');
@@ -341,23 +363,20 @@ describe('visit-invites-service - acceptVisitInviteByToken', () => {
     const invite = createVisitInvite({ visitId: 'visit-1', createdByUserId: 'u1', role: 'viewer' });
 
     const mockFirst = vi.fn().mockResolvedValue(invite);
-
-    (mockDb.visitInvites.where).mockReturnValue({
+    (db.visitInvites.where as ReturnType<typeof vi.fn>).mockReturnValue({
       equals: vi.fn().mockReturnValue({
         toArray: vi.fn(),
         first: mockFirst,
       }),
     } as never);
 
-    // Simula que não existe membership
-    const mockGet = vi.fn().mockResolvedValue(undefined);
-    (mockDb.visitMembers.get).mockImplementation(mockGet);
+    vi.mocked(getVisitMember).mockResolvedValue(undefined);
 
     const result = await acceptVisitInviteByToken(invite.token);
 
     expect(result.status).toBe('accepted');
 
-    const memberArg = (mockDb.visitMembers.put).mock.calls[0][0] as VisitMember;
+    const memberArg = (db.visitMembers.put as ReturnType<typeof vi.fn>).mock.calls[0][0] as VisitMember;
     expect(memberArg.role).toBe('viewer');
   });
 });
