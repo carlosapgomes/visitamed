@@ -1,10 +1,18 @@
 /**
  * WardFlow Cloud Functions
- * Slice S11C - Lógica real de aceite por token no backend
+ * Slice S11E - Hardening: token hash, rate-limit, auditoria
  */
 
 import * as functions from 'firebase-functions';
 import * as admin from 'firebase-admin';
+import { createHash } from 'crypto';
+
+/**
+ * Gera hash SHA-256 hex de uma string
+ */
+function sha256Hash(token: string): string {
+  return createHash('sha256').update(token).digest('hex');
+}
 
 admin.initializeApp();
 
@@ -12,6 +20,10 @@ const firestore = admin.firestore();
 
 type InviteRole = 'editor' | 'viewer';
 type MemberStatus = 'active' | 'removed';
+
+// S11E: Rate limit config
+const RATE_LIMIT_COOLDOWN_MS = 2000; // 2 segundos
+const RATE_LIMIT_COLLECTION = '_inviteAcceptRateLimit';
 
 type AcceptInviteBusinessStatus =
   | 'accepted'
@@ -40,6 +52,32 @@ interface InviteRecord {
 
 function setCors(res: functions.Response): void {
   res.set('Access-Control-Allow-Origin', '*');
+}
+
+// S11E: Rate limit check por uid
+async function checkRateLimit(userId: string): Promise<boolean> {
+  const rateLimitRef = firestore.collection(RATE_LIMIT_COLLECTION).doc(userId);
+  const now = Date.now();
+
+  try {
+    const docSnap = await rateLimitRef.get();
+
+    if (docSnap.exists) {
+      const lastAttempt = docSnap.data();
+      const lastAttemptTime = lastAttempt?.['lastAttempt'] as number | undefined;
+
+      if (lastAttemptTime && (now - lastAttemptTime) < RATE_LIMIT_COOLDOWN_MS) {
+        return false; // Rate limited
+      }
+    }
+
+    // Atualiza último timestamp
+    await rateLimitRef.set({ lastAttempt: now }, { merge: true });
+    return true;
+  } catch {
+    // Em caso de erro, permite tentativa
+    return true;
+  }
 }
 
 function parseDate(value: unknown): Date | null {
@@ -71,10 +109,13 @@ function parseInviteRole(value: unknown): InviteRole | null {
   return null;
 }
 
-async function findInviteByToken(token: string): Promise<InviteRecord | null> {
+async function findInviteByTokenHash(token: string): Promise<InviteRecord | null> {
+  // S11E: busca por tokenHash, não token puro
+  const tokenHash = sha256Hash(token);
+
   const snapshot = await firestore
     .collectionGroup('invites')
-    .where('token', '==', token)
+    .where('tokenHash', '==', tokenHash)
     .limit(1)
     .get();
 
@@ -190,8 +231,16 @@ export const acceptInviteEndpoint = functions.https.onRequest(async (req, res) =
   const token = body.token.trim();
   const now = new Date();
 
+  // S11E: Rate limit check
+  const canProceed = await checkRateLimit(decodedToken.uid);
+  if (!canProceed) {
+    setCors(res);
+    res.status(429).json({ error: 'rate-limited' });
+    return;
+  }
+
   try {
-    const invite = await findInviteByToken(token);
+    const invite = await findInviteByTokenHash(token);
 
     if (!invite) {
       const response: AcceptInviteResponse = { status: 'invite-not-found' };
@@ -220,7 +269,26 @@ export const acceptInviteEndpoint = functions.https.onRequest(async (req, res) =
       return;
     }
 
+    // S11E: auditoria de aceite
     const status = await acceptMembership(invite.visitId, decodedToken.uid, invite.role);
+
+    // Se aceite bem-sucedido, atualiza convite com auditoria
+    if (status === 'accepted') {
+      const inviteRef = firestore.collection('visits').doc(invite.visitId).collection('invites').doc(invite.id);
+      await firestore.runTransaction(async (transaction) => {
+        const inviteSnap = await transaction.get(inviteRef);
+        if (inviteSnap.exists) {
+          const currentData = inviteSnap.data();
+          const currentAcceptedCount = (currentData?.['acceptedCount'] as number) || 0;
+
+          transaction.update(inviteRef, {
+            acceptedCount: currentAcceptedCount + 1,
+            lastAcceptedAt: admin.firestore.FieldValue.serverTimestamp(),
+            lastAcceptedByUserId: decodedToken.uid,
+          });
+        }
+      });
+    }
 
     const response: AcceptInviteResponse = {
       status,

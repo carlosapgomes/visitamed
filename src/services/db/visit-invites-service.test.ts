@@ -357,6 +357,15 @@ describe('visit-invites-service - acceptVisitInviteByToken (endpoint remoto)', (
     await expect(acceptVisitInviteByToken('token')).rejects.toThrow('Erro no servidor. Tente novamente mais tarde.');
   });
 
+  it('lança erro quando endpoint retorna 429 (rate-limited)', async () => {
+    fetchMock.mockResolvedValueOnce({
+      status: 429,
+      json: () => Promise.resolve({ error: 'rate-limited' }),
+    } as never);
+
+    await expect(acceptVisitInviteByToken('token')).rejects.toThrow('Muitas tentativas. Aguarde alguns segundos e tente novamente.');
+  });
+
   it('lança erro quando payload de resposta é inválido', async () => {
     fetchMock.mockResolvedValueOnce({
       status: 200,

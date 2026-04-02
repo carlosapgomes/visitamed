@@ -1,10 +1,23 @@
 /**
  * VisitInvites Service
  * Serviço de persistência de convites de visitas
- * S11B: create/list/revoke migrados para Firestore remoto
+ * S11E: token hash SHA-256 em repouso, sem token bruto
  */
 
 import { doc, collection, setDoc, getDoc, getDocs, updateDoc, Timestamp, type Firestore } from 'firebase/firestore';
+
+/**
+ * Gera hash SHA-256 hex de uma string (Web Crypto API)
+ */
+export async function sha256Hash(token: string): Promise<string> {
+  const encoded = new TextEncoder().encode(token);
+  const digest = await globalThis.crypto.subtle.digest('SHA-256', encoded);
+  const bytes = new Uint8Array(digest);
+  return Array.from(bytes)
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
 import { getFirebaseFirestore } from '@/services/auth/firebase';
 import { createVisitInvite, isInviteActive, revokeInvite, type VisitInvite, type InviteRole, type CreateVisitInviteInput } from '@/models/visit-invite';
 import { getAuthState } from '@/services/auth/auth-service';
@@ -17,7 +30,7 @@ import { canManageInvites } from '@/services/auth/visit-permissions';
 export class InviteAcceptError extends Error {
   constructor(
     message: string,
-    public code: 'unauthenticated' | 'invalid-request' | 'method-not-allowed' | 'internal-error'
+    public code: 'unauthenticated' | 'invalid-request' | 'method-not-allowed' | 'internal-error' | 'rate-limited'
   ) {
     super(message);
     this.name = 'InviteAcceptError';
@@ -68,13 +81,14 @@ function firestoreTimestampToDate(timestamp: Timestamp | null | undefined): Date
 /**
  * Serializa VisitInvite para persistência no Firestore
  * Converte campos Date para Timestamp
+ * S11E: persiste tokenHash (SHA-256), não token bruto
  */
-function serializeVisitInviteForFirestore(invite: VisitInvite): Record<string, unknown> {
+function serializeVisitInviteForFirestore(invite: VisitInvite, tokenHash: string): Record<string, unknown> {
   return {
     id: invite.id,
     visitId: invite.visitId,
     createdByUserId: invite.createdByUserId,
-    token: invite.token,
+    tokenHash, // S11E: token hash em repouso
     role: invite.role,
     expiresAt: dateToFirestoreTimestamp(invite.expiresAt),
     createdAt: dateToFirestoreTimestamp(invite.createdAt),
@@ -86,13 +100,15 @@ function serializeVisitInviteForFirestore(invite: VisitInvite): Record<string, u
 /**
  * Deserializa convite do Firestore para modelo VisitInvite
  * Converte Timestamp para Date
+ * S11E: não tem token bruto no Firestore (apenas tokenHash)
  */
 function deserializeVisitInviteFromFirestore(data: Record<string, unknown>): VisitInvite {
   return {
     id: data['id'] as string,
     visitId: data['visitId'] as string,
     createdByUserId: data['createdByUserId'] as string,
-    token: data['token'] as string,
+    // Token não vem do Firestore (apenas hash), mantém compatibilidade com modelo
+    token: '',
     role: data['role'] as InviteRole,
     expiresAt: firestoreTimestampToDate(data['expiresAt'] as Timestamp | null | undefined),
     createdAt: firestoreTimestampToDate(data['createdAt'] as Timestamp | null | undefined),
@@ -145,10 +161,11 @@ export async function createVisitInviteForVisit(input: CreateVisitInviteInputSer
   };
 
   const invite = createVisitInvite(createInput);
+  const tokenHash = await sha256Hash(invite.token);
 
   // Persiste no Firestore: /visits/{visitId}/invites/{inviteId}
   const inviteRef = doc(firestore, 'visits', input.visitId, 'invites', invite.id);
-  await setDoc(inviteRef, serializeVisitInviteForFirestore(invite));
+  await setDoc(inviteRef, serializeVisitInviteForFirestore(invite, tokenHash));
 
   return invite;
 }
@@ -247,6 +264,7 @@ export interface AcceptInviteResult {
 export async function acceptVisitInviteByToken(token: string): Promise<AcceptInviteResult> {
   const { user } = getAuthState();
 
+  // S11E: erro de rate-limit
   if (!user) {
     throw new InviteAcceptError('Usuário não autenticado.', 'unauthenticated');
   }
@@ -274,6 +292,10 @@ export async function acceptVisitInviteByToken(token: string): Promise<AcceptInv
 
   if (response.status === 405) {
     throw new InviteAcceptError('Método não permitido.', 'method-not-allowed');
+  }
+
+  if (response.status === 429) {
+    throw new InviteAcceptError('Muitas tentativas. Aguarde alguns segundos e tente novamente.', 'rate-limited');
   }
 
   if (response.status >= 500) {
