@@ -324,9 +324,10 @@ export class AppHeader extends LitElement {
                 ${this.showBack
                   ? html`
                       <button
-                        class="btn p-0 border-0 bg-transparent text-body"
+                        class="btn wf-nav-left-control"
                         @click=${this.handleBackClick}
                         aria-label="Voltar"
+                        title="Voltar"
                       >
                         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
@@ -334,7 +335,7 @@ export class AppHeader extends LitElement {
                       </button>
                     `
                   : html`
-                      <span class="wf-brand text-primary" aria-label="VisitaMed">
+                      <span class="wf-brand wf-nav-left-control text-primary" aria-label="VisitaMed">
                         <svg xmlns="http://www.w3.org/2000/svg" width="36" height="24" viewBox="0 0 36 24" fill="none" role="img">
                           <!-- V -->
                           <path d="M2 4L8 20L14 4" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
@@ -364,7 +365,7 @@ export class AppHeader extends LitElement {
                                 ${this.currentTheme === 'dark' ? 'Usar tema claro' : 'Usar tema escuro'}
                               </button>
                               <button class="dropdown-item" @click=${this.handleMyVisitsClick}>
-                                Minhas visitas
+                                Início
                               </button>
                               <button class="dropdown-item" @click=${this.handleSettingsOpen}>
                                 Configurações
