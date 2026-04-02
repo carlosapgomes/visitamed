@@ -35,13 +35,46 @@ function validateOwnership(visit: Visit, userId: string): void {
 }
 
 /**
+ * Gera nome único para visita privada no mesmo dia
+ * Se baseName já existir, adiciona sufixo incremental: (2), (3), ...
+ */
+async function getUniqueVisitName(baseName: string, userId: string, date: string): Promise<string> {
+  const existingVisits = await db.visits
+    .where('userId')
+    .equals(userId)
+    .toArray();
+
+  const visitsOnDate = existingVisits.filter((v) => v.date === date);
+  const usedNames = new Set(visitsOnDate.map((v) => v.name));
+
+  if (!usedNames.has(baseName)) {
+    return baseName;
+  }
+
+  // Encontrar próximo sufixo disponível
+  let counter = 2;
+  let uniqueName = `${baseName} (${String(counter)})`;
+
+  while (usedNames.has(uniqueName)) {
+    counter++;
+    uniqueName = `${baseName} (${String(counter)})`;
+  }
+
+  return uniqueName;
+}
+
+/**
  * Cria uma nova visita privada
  * O nome é gerado automaticamente se não fornecido
+ * Garante nome único por usuário + data (dedupe automático)
  */
 export async function createPrivateVisit(namePrefix?: string): Promise<Visit> {
   const userId = requireUserId();
-  const name = generatePrivateVisitName(namePrefix);
+  const baseName = generatePrivateVisitName(namePrefix);
   const date = getCurrentDate();
+
+  // Garante nome único no mesmo dia
+  const name = await getUniqueVisitName(baseName, userId, date);
 
   const visit = createVisit({
     userId,

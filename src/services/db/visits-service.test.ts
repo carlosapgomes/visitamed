@@ -19,6 +19,13 @@ vi.mock('./dexie-db', () => ({
     visits: {
       get: vi.fn(),
       add: vi.fn(),
+      where: vi.fn(() => ({
+        equals: vi.fn(() => ({
+          toArray: vi.fn().mockResolvedValue([]),
+          reverse: vi.fn().mockReturnThis(),
+          sortBy: vi.fn().mockResolvedValue([]),
+        })),
+      })),
     },
     visitMembers: {
       get: vi.fn(),
@@ -263,5 +270,138 @@ describe('duplicateVisitAsPrivate', () => {
     expect(addedNotes.length).toBe(3);
     expect(addedSyncItems.length).toBe(3);
     expect(addedSyncItems.every((item) => (item as { operation: string }).operation === 'create')).toBe(true);
+  });
+});
+
+// Testes para createPrivateVisit com dedupe
+const { createPrivateVisit } = await import('./visits-service');
+
+describe('createPrivateVisit - nome opcional e dedupe', () => {
+  const mockUserId = 'user-test';
+  const currentDate = new Date().toISOString().split('T')[0];
+
+  const mockDbVisitsWhere = {
+    equals: vi.fn().mockReturnValue({
+      toArray: vi.fn().mockResolvedValue([]),
+    }),
+  };
+
+  const mockDb = db as unknown as {
+    visits: {
+      get: ReturnType<typeof vi.fn>;
+      add: ReturnType<typeof vi.fn>;
+      where: ReturnType<typeof vi.fn>;
+    };
+    visitMembers: { get: ReturnType<typeof vi.fn>; add: ReturnType<typeof vi.fn> };
+    notes: { where: ReturnType<typeof vi.fn>; add: ReturnType<typeof vi.fn> };
+    syncQueue: { add: ReturnType<typeof vi.fn> };
+    transaction: ReturnType<typeof vi.fn>;
+  };
+  const mockGetAuthState = getAuthState as unknown as ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockDb.visits.where.mockReturnValue(mockDbVisitsWhere);
+  });
+
+  it('deve criar visita sem prefixo (comportamento atual)', async () => {
+    mockGetAuthState.mockReturnValue({ user: { uid: mockUserId } });
+    mockDb.visits.where.mockReturnValue({
+      equals: vi.fn().mockReturnValue({
+        toArray: vi.fn().mockResolvedValue([]),
+      }),
+    } as typeof mockDbVisitsWhere);
+
+    mockDb.visits.add.mockResolvedValue(undefined);
+    mockDb.visitMembers.add.mockResolvedValue(undefined);
+
+    const result = await createPrivateVisit();
+
+    expect(result).toBeDefined();
+    expect(result.userId).toBe(mockUserId);
+    expect(result.date).toBe(currentDate);
+    expect(result.mode).toBe('private');
+    expect(result.name).toContain('privada');
+  });
+
+  it('deve criar visita com prefixo personalizado', async () => {
+    mockGetAuthState.mockReturnValue({ user: { uid: mockUserId } });
+    mockDb.visits.where.mockReturnValue({
+      equals: vi.fn().mockReturnValue({
+        toArray: vi.fn().mockResolvedValue([]),
+      }),
+    } as typeof mockDbVisitsWhere);
+
+    mockDb.visits.add.mockResolvedValue(undefined);
+    mockDb.visitMembers.add.mockResolvedValue(undefined);
+
+    const result = await createPrivateVisit('Plantão manhã');
+
+    expect(result).toBeDefined();
+    expect(result.name).toContain('Plantão manhã');
+    expect(result.name).toContain('privada');
+  });
+
+  it('deve adicionar sufixo (2) quando nome já existe no mesmo dia', async () => {
+    mockGetAuthState.mockReturnValue({ user: { uid: mockUserId } });
+
+    const existingVisit: Visit = {
+      id: 'existing-visit',
+      userId: mockUserId,
+      name: 'Plantão manhã 02-04-2026 privada',
+      date: currentDate,
+      mode: 'private',
+      createdAt: new Date(),
+    };
+
+    mockDb.visits.where.mockReturnValue({
+      equals: vi.fn().mockReturnValue({
+        toArray: vi.fn().mockResolvedValue([existingVisit]),
+      }),
+    } as typeof mockDbVisitsWhere);
+
+    mockDb.visits.add.mockResolvedValue(undefined);
+    mockDb.visitMembers.add.mockResolvedValue(undefined);
+
+    const result = await createPrivateVisit('Plantão manhã');
+
+    expect(result.name).toContain('(2)');
+    expect(result.name).not.toBe('Plantão manhã 02-04-2026 privada');
+  });
+
+  it('deve adicionar sufixo (3) quando nomes (2) também existem', async () => {
+    mockGetAuthState.mockReturnValue({ user: { uid: mockUserId } });
+
+    const existingVisits: Visit[] = [
+      {
+        id: 'visit-1',
+        userId: mockUserId,
+        name: 'Plantão manhã 02-04-2026 privada',
+        date: currentDate,
+        mode: 'private',
+        createdAt: new Date(),
+      },
+      {
+        id: 'visit-2',
+        userId: mockUserId,
+        name: 'Plantão manhã 02-04-2026 privada (2)',
+        date: currentDate,
+        mode: 'private',
+        createdAt: new Date(),
+      },
+    ];
+
+    mockDb.visits.where.mockReturnValue({
+      equals: vi.fn().mockReturnValue({
+        toArray: vi.fn().mockResolvedValue(existingVisits),
+      }),
+    } as typeof mockDbVisitsWhere);
+
+    mockDb.visits.add.mockResolvedValue(undefined);
+    mockDb.visitMembers.add.mockResolvedValue(undefined);
+
+    const result = await createPrivateVisit('Plantão manhã');
+
+    expect(result.name).toContain('(3)');
   });
 });

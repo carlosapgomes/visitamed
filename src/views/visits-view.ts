@@ -18,6 +18,8 @@ export class VisitsView extends LitElement {
   @state() private isLoading = true;
   @state() private isCreating = false;
   @state() private error = '';
+  @state() private showNameModal = false;
+  @state() private visitNameInput = '';
 
   private visitsSubscription: Subscription | null = null;
 
@@ -53,19 +55,32 @@ export class VisitsView extends LitElement {
     });
   }
 
-  private handleFabClick = async () => {
+  private handleFabClick = () => {
+    if (this.isCreating) return;
+    this.showNameModal = true;
+    this.visitNameInput = '';
+  };
+
+  private handleCreateVisit = async () => {
     if (this.isCreating) return;
 
     this.isCreating = true;
     this.error = '';
+    this.showNameModal = false;
 
     try {
-      const visit = await createPrivateVisit();
+      const namePrefix = this.visitNameInput.trim() || undefined;
+      const visit = await createPrivateVisit(namePrefix);
       navigate(`/visita/${visit.id}`);
     } catch (err) {
       this.error = err instanceof Error ? err.message : 'Erro ao criar visita';
       this.isCreating = false;
     }
+  };
+
+  private handleCancelModal = () => {
+    this.showNameModal = false;
+    this.visitNameInput = '';
   };
 
   private handleVisitClick = (visit: Visit) => {
@@ -78,6 +93,49 @@ export class VisitsView extends LitElement {
 
     const [, year, month, day] = match;
     return `${day}-${month}-${year}`;
+  }
+
+  private renderNameModal() {
+    if (!this.showNameModal) return null;
+
+    return html`
+      <div class="modal-backdrop show" @click=${this.handleCancelModal}></div>
+      <div class="modal show d-block" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title">Nova visita</h5>
+              <button type="button" class="btn-close" @click=${this.handleCancelModal}></button>
+            </div>
+            <div class="modal-body">
+              <label for="visit-name-input" class="form-label">Nome (opcional)</label>
+              <input
+                type="text"
+                id="visit-name-input"
+                class="form-control"
+                placeholder="Ex.: Plantão manhã, Cirurgia"
+                .value=${this.visitNameInput}
+                @input=${(e: Event) => {
+                  this.visitNameInput = (e.target as HTMLInputElement).value;
+                }}
+                @keydown=${(e: KeyboardEvent) => {
+                  if (e.key === 'Enter') void this.handleCreateVisit();
+                }}
+              />
+              <div class="form-text">Se vazio, será gerado automaticamente</div>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" @click=${this.handleCancelModal}>
+                Cancelar
+              </button>
+              <button type="button" class="btn btn-primary" @click=${this.handleCreateVisit}>
+                Criar
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
   }
 
   private renderEmptyState() {
@@ -143,6 +201,8 @@ export class VisitsView extends LitElement {
           ? html`<div class="alert alert-danger py-2 px-3 mt-3" role="alert">${this.error}</div>`
           : null}
       </main>
+
+      ${this.renderNameModal()}
 
       <fab-button
         icon="plus"
