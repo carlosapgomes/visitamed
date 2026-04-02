@@ -69,7 +69,7 @@
 | S9A | DONE | Exportação com mesmo critério do dashboard | `docs/collab-slice9a-export-by-tags-aligned-dashboard-handoff-prompt.md` |
 | S10 | DONE | Hardening final + limpeza | `docs/collab-slice10-hardening-final-cleanup-handoff-prompt.md` |
 | S11A | DONE | Backend baseline: endpoint autenticado para aceitar convite | `docs/collab-slice11a-invite-accept-endpoint-baseline-handoff-prompt.md` |
-| S11B | TODO | Fonte remota de convites (create/revoke/list em Firestore) | (gerar) |
+| S11B | TODO | Fonte remota de convites (create/revoke/list em Firestore) | `docs/collab-slice11b-remote-invites-firestore-handoff-prompt.md` |
 | S11C | TODO | Aceite real por token no backend (transação + statuses) | (gerar) |
 | S11D | TODO | Frontend troca aceite local por endpoint remoto | (gerar) |
 | S11E | TODO | Hardening do fluxo de convite remoto (hash/rate-limit/auditoria) | (gerar) |
