@@ -74,7 +74,7 @@
 | S11D | DONE | Frontend troca aceite local por endpoint remoto | `docs/collab-slice11d-frontend-accept-via-endpoint-handoff-prompt.md` |
 | S11E | DONE | Hardening do fluxo de convite remoto (hash/rate-limit/auditoria) | `docs/collab-slice11e-invite-flow-hardening-handoff-prompt.md` |
 | S12A | DONE | UX tags-first: remover campo ala da tela de nota + header fixo do app | `docs/collab-slice12a-tags-first-ui-header-handoff-prompt.md` |
-| S12B | TODO | Remover `ward` de model/serviços/rules (domínio 100% tags-first) | (gerar) |
+| S12B | DONE | Core tags-first: remover obrigatoriedade de `ward` em contracts/serviços/rules | `docs/collab-slice12b-core-tags-first-no-ward-required-handoff-prompt.md` |
 | S12C | TODO | Limpeza de legados `ward-*` (stats/settings/sync/tests) | (gerar) |
 
 ---
@@ -109,14 +109,15 @@
 - S11D: `76cdbaf`
 - S11E: `ca53be3`
 - S12A: `b2eab8b`
+- S12B: `64b14e4`
 
-Estado atual validado localmente: typecheck/lint/test verdes (234 testes).
+Estado atual validado localmente: typecheck/lint/test verdes (232 testes).
 
 ---
 
 ## Débitos conhecidos
 
-- Migração estrutural para domínio 100% tags-first ainda pendente (S12B/S12C): remover `ward` de model/serviços/rules e limpar legados `ward-*`.
+- Migração estrutural para domínio 100% tags-first ainda pendente em S12C: limpeza de legados `ward-*` (stats/settings/sync/tests).
 - Fluxo remoto de convite endurecido com tokenHash, rate-limit básico e auditoria de aceite (S11E).
 - Preservação robusta de deep link em cenários de auth edge-case pode ser refinada em hardening.
 
