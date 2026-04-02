@@ -3,9 +3,10 @@
  * Slice S11E - Hardening: token hash, rate-limit, auditoria
  */
 
-import * as functions from 'firebase-functions';
+import { onRequest } from 'firebase-functions/v2/https';
 import * as admin from 'firebase-admin';
 import { createHash } from 'crypto';
+import type { Request, Response } from 'express';
 
 /**
  * Gera hash SHA-256 hex de uma string
@@ -50,7 +51,7 @@ interface InviteRecord {
   revokedAt: Date | null;
 }
 
-function setCors(res: functions.Response): void {
+function setCors(res: Response): void {
   res.set('Access-Control-Allow-Origin', '*');
 }
 
@@ -188,7 +189,7 @@ async function acceptMembership(visitId: string, userId: string, role: InviteRol
  * Endpoint autenticado para aceitar convite
  * Rota: POST /api/invites/accept
  */
-export const acceptInviteEndpoint = functions.region('southamerica-east1').https.onRequest(async (req, res) => {
+export const acceptInviteEndpoint = onRequest({ region: 'southamerica-east1' }, async (req: Request, res: Response) => {
   if (req.method === 'OPTIONS') {
     setCors(res);
     res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
