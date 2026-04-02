@@ -104,9 +104,9 @@ describe('duplicateVisitAsPrivate', () => {
     userId: 'user-owner',
     visitId: mockSourceVisitId,
     date: '2026-01-15',
-    ward: 'UTI',
     bed: '01',
     note: 'Paciente estável',
+    tags: ['UTI'],
     createdAt: new Date(),
     expiresAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
     syncStatus: 'synced',
@@ -216,7 +216,7 @@ describe('duplicateVisitAsPrivate', () => {
     expect(addedNotes.length).toBe(1);
     expect(addedNotes[0].userId).toBe(mockUserId);
     expect(addedNotes[0].visitId).toBe(result.id);
-    expect(addedNotes[0].ward).toBe(mockSourceNote.ward);
+    expect(addedNotes[0].tags).toEqual(mockSourceNote.tags);
     expect(addedNotes[0].bed).toBe(mockSourceNote.bed);
     expect(addedNotes[0].note).toBe(mockSourceNote.note);
     expect(addedNotes[0].syncStatus).toBe('pending');

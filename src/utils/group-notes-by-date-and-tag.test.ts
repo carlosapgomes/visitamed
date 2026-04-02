@@ -16,7 +16,6 @@ function createTestNote(overrides: Partial<Note> = {}): Note {
     id: crypto.randomUUID(),
     userId: 'test-user',
     date: '2024-03-25',
-    ward: 'UTI',
     bed: '01',
     visitId: 'visit-1',
     note: 'Test note',
@@ -36,7 +35,7 @@ describe('groupNotesByDateAndTag', () => {
 
   it('nota sem tags válidas não entra em grupo', () => {
     const notes: Note[] = [
-      createTestNote({ id: '1', date: '2024-03-25', ward: 'UTI', tags: [] }),
+      createTestNote({ id: '1', date: '2024-03-25', tags: [] }),
     ];
 
     const result = groupNotesByDateAndTag(notes);
@@ -46,7 +45,7 @@ describe('groupNotesByDateAndTag', () => {
 
   it('nota com tags usa as tags como grupo', () => {
     const notes: Note[] = [
-      createTestNote({ id: '1', date: '2024-03-25', ward: 'UTI', tags: ['Pediatria', 'UTI'] }),
+      createTestNote({ id: '1', date: '2024-03-25', tags: ['Pediatria', 'UTI'] }),
     ];
 
     const result = groupNotesByDateAndTag(notes);
@@ -186,7 +185,7 @@ describe('groupNotesByDateAndTag', () => {
   it('ignora notas sem tags em lote misto', () => {
     const notes: Note[] = [
       createTestNote({ id: '1', date: '2024-03-25', tags: ['UTI'] }),
-      createTestNote({ id: '2', date: '2024-03-25', ward: 'Enfermaria', tags: [] }),
+      createTestNote({ id: '2', date: '2024-03-25', tags: [] }),
     ];
 
     const result = groupNotesByDateAndTag(notes);

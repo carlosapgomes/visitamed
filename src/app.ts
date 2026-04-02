@@ -15,7 +15,6 @@ import {
   initializeSync,
   pullRemoteNotes,
   pullRemoteSettings,
-  pullRemoteWardStats,
   syncNow,
   setActiveVisitRealtime,
 } from '@/services/sync/sync-service';
@@ -149,7 +148,6 @@ export class VisitaMedApp extends LitElement {
   private async performSync(): Promise<void> {
     await syncNow();
     await pullRemoteNotes();
-    await pullRemoteWardStats();
     await pullRemoteSettings();
   }
 

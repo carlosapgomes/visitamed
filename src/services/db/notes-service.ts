@@ -67,7 +67,6 @@ export async function saveNote(input: CreateNoteInput): Promise<Note> {
   const note = createNote({
     userId,
     visitId: input.visitId,
-    ward: '', // S12B: ward não é mais obrigatório
     bed: input.bed.trim(),
     note: input.note.trim(),
     reference: input.reference?.trim() ?? undefined,

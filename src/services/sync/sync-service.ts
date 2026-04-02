@@ -1,15 +1,12 @@
 /**
  * VisitaMed Sync Service
- * Serviço de sincronização entre IndexedDB e Firestore
- *
- * TODO: Implementar sincronização completa na próxima fase
+ * Serviço de sincronização entre IndexedDB e Firestore (tags-first)
  */
 
 import { db } from '@/services/db/dexie-db';
 import type { Note } from '@/models/note';
 import type { VisitMember } from '@/models/visit-member';
 import type { SyncQueueItem } from '@/models/sync-queue';
-import type { WardStat } from '@/models/ward-stat';
 import { normalizeSettings, SETTINGS_ID, type Settings } from '@/models/settings';
 import { normalizeTagList } from '@/models/tag';
 import { getFirebaseFirestore } from '@/services/auth/firebase';
@@ -22,7 +19,6 @@ import {
   getDocs,
   setDoc,
   updateDoc,
-  increment,
   onSnapshot,
   type DocumentData,
   type Firestore,
@@ -368,9 +364,6 @@ async function processSyncItem(item: SyncQueueItem, firestore: Firestore): Promi
     case 'note':
       await processNoteSyncItem(item, firestore);
       return;
-    case 'wardStat':
-      await processWardStatSyncItem(item, firestore);
-      return;
     case 'settings':
       await processSettingsSyncItem(item, firestore);
       return;
@@ -538,12 +531,7 @@ async function processNoteSyncItem(item: SyncQueueItem, firestore: Firestore): P
  */
 interface SettingsSyncPayload {
   inputPreferences: {
-    uppercaseWard: boolean;
     uppercaseBed: boolean;
-  };
-  wardPreferences: {
-    hiddenWardKeys: string[];
-    labelOverrides: Record<string, string>;
   };
   updatedAt: string;
 }
@@ -583,7 +571,6 @@ async function processSettingsSyncItem(item: SyncQueueItem, firestore: Firestore
         id: SETTINGS_ID,
         userId: item.userId,
         inputPreferences: payload.inputPreferences,
-        wardPreferences: payload.wardPreferences,
         updatedAt: payload.updatedAt,
       },
       item.userId
@@ -591,56 +578,7 @@ async function processSettingsSyncItem(item: SyncQueueItem, firestore: Firestore
   );
 }
 
-/**
- * Payload do sync de wardStat
- */
-interface WardStatSyncPayload {
-  wardKey: string;
-  wardLabel: string;
-  usageCount: number;
-  lastUsedAt: string;
-  updatedAt: string;
-}
-
-/**
- * Processa sync de wardStat com incremento
- * Usa increment() do Firestore para modelo aditivo
- */
-async function processWardStatSyncItem(item: SyncQueueItem, firestore: Firestore): Promise<void> {
-  let payload: WardStatSyncPayload;
-
-  try {
-    payload = JSON.parse(item.payload) as WardStatSyncPayload;
-  } catch {
-    throw new Error('Payload inválido na fila de sincronização de wardStat');
-  }
-
-  const wardRef = doc(firestore, 'users', item.userId, 'wardStats', item.entityId);
-  const now = new Date();
-
-  // Dados que sempre devem ser atualizados (não incrementais)
-  const updateData = {
-    wardKey: payload.wardKey,
-    wardLabel: payload.wardLabel,
-    lastUsedAt: payload.lastUsedAt,
-    updatedAt: now.toISOString(),
-    userId: item.userId,
-  };
-
-  // Tenta usar updateDoc com increment primeiro
-  try {
-    await updateDoc(wardRef, {
-      ...updateData,
-      usageCount: increment(1),
-    } as UpdateData<DocumentData>);
-  } catch {
-    // Se documento não existe, usa setDoc com merge
-    await setDoc(wardRef, {
-      ...updateData,
-      usageCount: increment(1),
-    }, { merge: true });
-  }
-}
+// Removido: processWardStatSyncItem (tags-first)
 
 /**
  * Trata erros de sincronização
@@ -672,7 +610,7 @@ async function handleSyncError(item: SyncQueueItem, error: unknown): Promise<voi
       lastAttemptAt,
     });
 
-    // Marca sincronização falhou apenas para notas (não para wardStats)
+    // Marca sincronização falhou apenas para notas
     if (item.entityType === 'note') {
       await db.notes.update(item.entityId, {
         syncStatus: 'failed',
@@ -702,7 +640,6 @@ async function syncIfAuthenticated(): Promise<void> {
 
   await syncNow();
   await pullRemoteNotes();
-  await pullRemoteWardStats();
   await pullRemoteSettings();
 }
 
@@ -927,7 +864,6 @@ export async function pullRemoteNotes(): Promise<void> {
 interface FirestoreNoteData {
   visitId: string | null;
   date: string | null;
-  ward: string | null;
   bed: string | null;
   reference?: string;
   note: string | null;
@@ -994,7 +930,6 @@ function convertFirestoreNoteToLocal(
     userId,
     visitId: data.visitId ?? '',
     date: data.date ?? '',
-    ward: data.ward ?? '',
     bed: data.bed ?? '',
     reference: data.reference,
     note: data.note ?? '',
@@ -1026,207 +961,12 @@ function notifySubscribers(): void {
 }
 
 // ============================================================================
-// Ward Stats - Pull e Merge
-// ============================================================================
-
-/**
- * Interface para dados de wardStat vindos do Firestore
- */
-interface FirestoreWardStatData {
-  wardKey: string;
-  wardLabel: string;
-  usageCount: number;
-  lastUsedAt: string;
-  updatedAt: string;
-  userId?: string;
-}
-
-/**
- * Converte documento do Firestore para modelo local WardStat
- */
-function convertFirestoreWardStatToLocal(
-  id: string,
-  data: FirestoreWardStatData,
-  userId: string
-): WardStat {
-  const lastUsedAt = convertTimestampToDate(data.lastUsedAt) ?? new Date();
-  const updatedAt = convertTimestampToDate(data.updatedAt) ?? new Date();
-
-  return {
-    id,
-    userId,
-    wardKey: data.wardKey,
-    wardLabel: data.wardLabel,
-    usageCount: data.usageCount,
-    lastUsedAt,
-    updatedAt,
-  };
-}
-
-/**
- * Verifica se existe item pendente na syncQueue para um wardKey específico
- */
-function hasLocalPendingWardStat(wardKey: string, pendingWardKeys: Set<string>): boolean {
-  return pendingWardKeys.has(wardKey);
-}
-
-/**
- * Resolve conflito entre wardStat local e remota usando política definida.
- *
- * Regras:
- * - Se não existe local -> usar remote
- * - Se existe pendência local (na syncQueue) ->
- *   - preservar usageCount local
- *   - usar lastUsedAt mais recente (max)
- * - Se não há pendência ->
- *   - manter maior usageCount
- *   - para empate, maior lastUsedAt
- */
-export function resolveWardStatConflict(
-  local: WardStat | undefined,
-  remote: FirestoreWardStatData,
-  pendingWardKeys: Set<string>
-): WardStat {
-  const wardKey = remote.wardKey;
-
-  // Caso 1: não existe local - usar remoto
-  if (!local) {
-    return convertFirestoreWardStatToLocal(
-      `${remote.userId ?? ''}:${wardKey}`,
-      remote,
-      remote.userId ?? ''
-    );
-  }
-
-  // Caso 2: existe pendência local - preservar contagem, usar lastUsedAt mais recente
-  if (hasLocalPendingWardStat(wardKey, pendingWardKeys)) {
-    const localTime = new Date(local.lastUsedAt).getTime();
-    const remoteTime = new Date(remote.lastUsedAt).getTime();
-    const lastUsedAt = localTime > remoteTime ? local.lastUsedAt : new Date(remote.lastUsedAt);
-
-    return {
-      ...local,
-      lastUsedAt,
-      updatedAt: new Date(),
-    };
-  }
-
-  // Caso 3: sem pendência - aplicar regra normal (maior contagem, desempate por recência)
-  if (remote.usageCount > local.usageCount) {
-    return convertFirestoreWardStatToLocal(local.id, remote, local.userId);
-  }
-
-  if (local.usageCount > remote.usageCount) {
-    return local;
-  }
-
-  // Empate de usageCount - usar mais recente
-  const localTime = new Date(local.lastUsedAt).getTime();
-  const remoteTime = new Date(remote.lastUsedAt).getTime();
-
-  if (remoteTime > localTime) {
-    return convertFirestoreWardStatToLocal(local.id, remote, local.userId);
-  }
-
-  return local;
-}
-
-/**
- * Obtém set de wardKeys com pendência local na syncQueue
- */
-async function getPendingWardStatKeys(userId: string): Promise<Set<string>> {
-  const pendingItems = await db.syncQueue
-    .where('userId')
-    .equals(userId)
-    .and((item) => item.entityType === 'wardStat')
-    .toArray();
-
-  return new Set(pendingItems.map((item) => item.entityId));
-}
-
-/**
- * Pull inicial de wardStats remotos do Firestore para IndexedDB
- * Mescla com dados locais respeitando política de conflito
- */
-export async function pullRemoteWardStats(): Promise<void> {
-  const { user, loading } = getAuthState();
-
-  if (loading || !user) {
-    return;
-  }
-
-  if (typeof navigator !== 'undefined' && !navigator.onLine) {
-    return;
-  }
-
-  const firestore = getFirebaseFirestore();
-
-  if (!firestore) {
-    console.warn('[VisitaMed] Firestore não configurado');
-    return;
-  }
-
-  let pullError: string | null = null;
-
-  try {
-    const wardStatsCollection = collection(firestore, 'users', user.uid, 'wardStats');
-    const wardStatsSnapshot = await getDocs(wardStatsCollection);
-
-    if (wardStatsSnapshot.empty) {
-      console.log('[VisitaMed] Nenhum wardStat remoto encontrado');
-      return;
-    }
-
-    // Obter wardKeys com pendência local
-    const pendingWardKeys = await getPendingWardStatKeys(user.uid);
-
-    const wardStatsToUpsert: WardStat[] = [];
-
-    for (const docSnap of wardStatsSnapshot.docs) {
-      const data = docSnap.data() as FirestoreWardStatData;
-      const remoteWardStat = { ...data, userId: user.uid };
-
-      // Buscar wardStat local existente
-      const id = `${user.uid}:${data.wardKey}`;
-      const localWardStat = await db.wardStats.get(id);
-
-      // Aplicar política de resolução de conflito
-      const resolvedWardStat = resolveWardStatConflict(
-        localWardStat,
-        remoteWardStat,
-        pendingWardKeys
-      );
-
-      wardStatsToUpsert.push(resolvedWardStat);
-    }
-
-    // Upsert into IndexedDB com wardStats resolvidos
-    await db.wardStats.bulkPut(wardStatsToUpsert);
-
-    console.log(`[VisitaMed] Pull de wardStats concluído: ${String(wardStatsToUpsert.length)} stats importados`);
-  } catch (error) {
-    pullError = error instanceof Error ? error.message : 'Erro no pull de wardStats remotos';
-    console.error('[VisitaMed] Erro no pull de wardStats remotos:', error);
-  }
-
-  // Log de erro se houver (não atualiza status global para não sobrescrever info de notas)
-  if (pullError) {
-    console.warn('[VisitaMed] Erro no pull de wardStats:', pullError);
-  }
-}
-
-// ============================================================================
-// Settings - Pull e Merge
+// Settings - Pull e Merge (tags-first)
 // ============================================================================
 
 interface FirestoreSettingsData {
   inputPreferences?: {
-    uppercaseWard?: boolean;
     uppercaseBed?: boolean;
-  };
-  wardPreferences?: {
-    hiddenWardKeys?: string[];
-    labelOverrides?: Record<string, string>;
   };
   updatedAt?: unknown;
   userId?: string;
@@ -1254,7 +994,6 @@ export function resolveSettingsConflict(
       id: SETTINGS_ID,
       userId,
       inputPreferences: remoteData.inputPreferences,
-      wardPreferences: remoteData.wardPreferences,
       updatedAt: remoteUpdatedAt,
     },
     userId

@@ -11,22 +11,11 @@ import {
   SETTINGS_ID,
   type InputPreferences,
   type Settings,
-  type WardPreferences,
 } from '@/models/settings';
 import { createSyncQueueItem } from '@/models/sync-queue';
-import { normalizeWardKey, normalizeWardLabel, type WardStat } from '@/models/ward-stat';
-
-export interface WardSuggestionItem {
-  wardKey: string;
-  wardLabel: string;
-  usageCount: number;
-  lastUsedAt: Date;
-  hidden: boolean;
-}
 
 interface SettingsSyncPayload {
   inputPreferences: InputPreferences;
-  wardPreferences: WardPreferences;
   updatedAt: string;
 }
 
@@ -43,7 +32,6 @@ function requireUserId(): string {
 function serializeForSync(settings: Settings): SettingsSyncPayload {
   return {
     inputPreferences: settings.inputPreferences,
-    wardPreferences: settings.wardPreferences,
     updatedAt: settings.updatedAt.toISOString(),
   };
 }
@@ -89,57 +77,6 @@ export function applyInputCase(value: string, useUppercase: boolean): string {
   return useUppercase ? value.toUpperCase() : value;
 }
 
-export function applyWardPreferencesToLabels(
-  labels: string[],
-  wardPreferences: WardPreferences
-): string[] {
-  const result: string[] = [];
-  const seenKeys = new Set<string>();
-
-  for (const label of labels) {
-    const wardKey = normalizeWardKey(label);
-
-    if (!wardKey || seenKeys.has(wardKey)) {
-      continue;
-    }
-
-    if (wardPreferences.hiddenWardKeys.includes(wardKey)) {
-      continue;
-    }
-
-    const finalLabel = wardPreferences.labelOverrides[wardKey] ?? normalizeWardLabel(label);
-    if (!finalLabel) {
-      continue;
-    }
-
-    result.push(finalLabel);
-    seenKeys.add(wardKey);
-  }
-
-  return result;
-}
-
-export function buildWardSuggestionItems(
-  stats: WardStat[],
-  wardPreferences: WardPreferences,
-  includeHidden = false
-): WardSuggestionItem[] {
-  return stats
-    .map((stat) => {
-      const hidden = wardPreferences.hiddenWardKeys.includes(stat.wardKey);
-      const wardLabel = wardPreferences.labelOverrides[stat.wardKey] ?? stat.wardLabel;
-
-      return {
-        wardKey: stat.wardKey,
-        wardLabel,
-        usageCount: stat.usageCount,
-        lastUsedAt: stat.lastUsedAt,
-        hidden,
-      };
-    })
-    .filter((item) => includeHidden || !item.hidden);
-}
-
 export async function getUserSettings(): Promise<Settings> {
   const userId = requireUserId();
   const existing = await getExistingSettingsForUser(userId);
@@ -165,102 +102,6 @@ export async function updateInputPreferences(
     inputPreferences: {
       ...current.inputPreferences,
       ...updates,
-    },
-    updatedAt: new Date(),
-  };
-
-  await db.transaction('rw', db.settings, db.syncQueue, async () => {
-    await saveSettingsInTransaction(next);
-  });
-
-  return next;
-}
-
-export async function hideWardSuggestion(wardKeyInput: string): Promise<Settings> {
-  const wardKey = normalizeWardKey(wardKeyInput);
-
-  if (!wardKey) {
-    return getUserSettings();
-  }
-
-  const current = await getUserSettings();
-
-  const hiddenWardKeys = current.wardPreferences.hiddenWardKeys.includes(wardKey)
-    ? current.wardPreferences.hiddenWardKeys
-    : [...current.wardPreferences.hiddenWardKeys, wardKey];
-
-  const next: Settings = {
-    ...current,
-    wardPreferences: {
-      ...current.wardPreferences,
-      hiddenWardKeys,
-    },
-    updatedAt: new Date(),
-  };
-
-  await db.transaction('rw', db.settings, db.syncQueue, async () => {
-    await saveSettingsInTransaction(next);
-  });
-
-  return next;
-}
-
-export async function restoreWardSuggestion(wardKeyInput: string): Promise<Settings> {
-  const wardKey = normalizeWardKey(wardKeyInput);
-
-  if (!wardKey) {
-    return getUserSettings();
-  }
-
-  const current = await getUserSettings();
-
-  const hiddenWardKeys = current.wardPreferences.hiddenWardKeys.filter((key) => key !== wardKey);
-
-  const next: Settings = {
-    ...current,
-    wardPreferences: {
-      ...current.wardPreferences,
-      hiddenWardKeys,
-    },
-    updatedAt: new Date(),
-  };
-
-  await db.transaction('rw', db.settings, db.syncQueue, async () => {
-    await saveSettingsInTransaction(next);
-  });
-
-  return next;
-}
-
-export async function setWardLabelOverride(
-  wardKeyInput: string,
-  wardLabelInput: string
-): Promise<Settings> {
-  const wardKey = normalizeWardKey(wardKeyInput);
-
-  if (!wardKey) {
-    return getUserSettings();
-  }
-
-  const wardLabel = normalizeWardLabel(wardLabelInput);
-  const current = await getUserSettings();
-
-  const currentOverrides = { ...current.wardPreferences.labelOverrides };
-
-  const labelOverrides = wardLabel
-    ? {
-        ...currentOverrides,
-        [wardKey]: wardLabel,
-      }
-    : Object.fromEntries(
-        Object.entries(currentOverrides).filter(([key]) => key !== wardKey)
-      );
-
-  const next: Settings = {
-    ...current,
-    wardPreferences: {
-      ...current.wardPreferences,
-      labelOverrides,
     },
     updatedAt: new Date(),
   };

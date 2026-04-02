@@ -14,7 +14,7 @@ export interface SyncQueueItem {
   operation: SyncOperation;
 
   /** Tipo de entidade */
-  entityType: 'note' | 'settings' | 'wardStat';
+  entityType: 'note' | 'settings';
 
   /** ID da entidade */
   entityId: string;
@@ -35,7 +35,7 @@ export interface SyncQueueItem {
   error?: string;
 }
 
-export type SyncOperation = 'create' | 'update' | 'delete' | 'increment';
+export type SyncOperation = 'create' | 'update' | 'delete';
 
 /**
  * Constantes da fila de sincronização

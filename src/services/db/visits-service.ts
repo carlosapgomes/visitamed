@@ -149,13 +149,12 @@ export async function duplicateVisitAsPrivate(sourceVisitId: string): Promise<Vi
   // Buscar notas da visita origem
   const sourceNotes = await db.notes.where('visitId').equals(sourceVisitId).toArray();
 
-  // Criar notas duplicadas
+  // Criar notas duplicadas (tags-first)
   const duplicatedNotes: Note[] = sourceNotes.map((note) =>
     createNote({
       userId,
       visitId: newVisit.id,
       date: newDate,
-      ward: note.ward,
       bed: note.bed,
       note: note.note,
       reference: note.reference,
