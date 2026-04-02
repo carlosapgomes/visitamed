@@ -69,7 +69,7 @@
 | S9A | DONE | Exportação com mesmo critério do dashboard | `docs/collab-slice9a-export-by-tags-aligned-dashboard-handoff-prompt.md` |
 | S10 | DONE | Hardening final + limpeza | `docs/collab-slice10-hardening-final-cleanup-handoff-prompt.md` |
 | S11A | DONE | Backend baseline: endpoint autenticado para aceitar convite | `docs/collab-slice11a-invite-accept-endpoint-baseline-handoff-prompt.md` |
-| S11B | TODO | Fonte remota de convites (create/revoke/list em Firestore) | `docs/collab-slice11b-remote-invites-firestore-handoff-prompt.md` |
+| S11B | DONE | Fonte remota de convites (create/revoke/list em Firestore) | `docs/collab-slice11b-remote-invites-firestore-handoff-prompt.md` |
 | S11C | TODO | Aceite real por token no backend (transação + statuses) | (gerar) |
 | S11D | TODO | Frontend troca aceite local por endpoint remoto | (gerar) |
 | S11E | TODO | Hardening do fluxo de convite remoto (hash/rate-limit/auditoria) | (gerar) |
@@ -101,15 +101,16 @@
 - S9A: `b26db22`
 - S10: `e3461dc`
 - S11A: `8332408`
+- S11B: `218af6d`
 
-Estado atual validado localmente: typecheck/lint/test verdes (226 testes).
+Estado atual validado localmente: typecheck/lint/test verdes (229 testes).
 
 ---
 
 ## Débitos conhecidos
 
-- Owner-only para criar/revogar convite ainda precisa ser fechado na camada remota (rules/functions).
-- Aceite de convite ainda está em transição: S11A criou endpoint autenticado baseline; lógica remota completa segue para S11B–S11E.
+- Aceite de convite ainda está em transição: S11A + S11B concluídos (endpoint baseline + create/list/revoke remotos); falta fechar aceite remoto por token em S11C/S11D.
+- Hardening de segurança do fluxo remoto (hash/rate-limit/auditoria) pendente para S11E.
 - Preservação robusta de deep link em cenários de auth edge-case pode ser refinada em hardening.
 
 ---
