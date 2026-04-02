@@ -82,6 +82,7 @@
 | S13D | DONE | Aviso ao recarregar/fechar aba com rascunho não salvo na nota (`beforeunload`) | `docs/collab-slice13d-note-beforeunload-unsaved-guard-handoff-prompt.md` |
 | S14A | DONE | Pull remoto de memberships + visitas no login (hidratação multi-dispositivo) | `docs/collab-slice14a-pull-remote-memberships-visits-handoff-prompt.md` |
 | S14B | DONE | Push de visita + membership owner via fila de sync (criação/duplicação) | `docs/collab-slice14b-push-visit-owner-membership-sync-queue-handoff-prompt.md` |
+| S14C | DONE | Guard de logout com pendências de sync (evitar perda silenciosa) | `docs/collab-slice14c-logout-sync-pending-guard-handoff-prompt.md` |
 
 ---
 
@@ -123,6 +124,7 @@
 - S13D: `c781b66`
 - S14A: `14fbde9`
 - S14B: `567dd61`
+- S14C: `4befc15`
 
 Estado atual validado localmente: typecheck/lint/test verdes (217 testes).
 
