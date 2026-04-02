@@ -183,12 +183,8 @@ export class NewNoteView extends LitElement {
       return;
     }
 
-    // S12A: ponte técnica - preenche ward com primeira tag para manter contrato atual
-    const wardValue = this.tags.length > 0 ? this.tags[0] : '';
-
     const input: CreateNoteInput = {
       visitId: this.visitId,
-      ward: wardValue,
       bed: this.bed,
       reference: this.reference || undefined,
       note: this.note,

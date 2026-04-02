@@ -126,15 +126,13 @@ service cloud.firestore {
 
   // Valida criação de nota
   function isValidNoteCreate(data, pathUserId, noteId) {
-    return data.ward is string
-      && data.bed is string
+    return data.bed is string
       && data.note is string
       && data.date is string
       && data.createdAt is timestamp
       && data.expiresAt is timestamp
       && data.userId == pathUserId
       && data.id == noteId
-      && data.ward.size() <= 100
       && data.bed.size() <= 100
       && data.note.size() <= 2000
       && data.date.size() == 10
@@ -150,7 +148,6 @@ service cloud.firestore {
       && newData.userId == pathUserId
       && newData.id == oldData.id
       && newData.id == noteId
-      && (newData.ward == null || (newData.ward is string && newData.ward.size() <= 100))
       && (newData.bed == null || (newData.bed is string && newData.bed.size() <= 100))
       && (newData.note == null || (newData.note is string && newData.note.size() <= 2000))
       && (newData.reference == null || (newData.reference is string && newData.reference.size() <= 100))
