@@ -71,7 +71,7 @@
 | S11A | DONE | Backend baseline: endpoint autenticado para aceitar convite | `docs/collab-slice11a-invite-accept-endpoint-baseline-handoff-prompt.md` |
 | S11B | DONE | Fonte remota de convites (create/revoke/list em Firestore) | `docs/collab-slice11b-remote-invites-firestore-handoff-prompt.md` |
 | S11C | DONE | Aceite real por token no backend (transação + statuses) | `docs/collab-slice11c-invite-accept-backend-transaction-handoff-prompt.md` |
-| S11D | TODO | Frontend troca aceite local por endpoint remoto | (gerar) |
+| S11D | DONE | Frontend troca aceite local por endpoint remoto | `docs/collab-slice11d-frontend-accept-via-endpoint-handoff-prompt.md` |
 | S11E | TODO | Hardening do fluxo de convite remoto (hash/rate-limit/auditoria) | (gerar) |
 
 ---
@@ -103,14 +103,15 @@
 - S11A: `8332408`
 - S11B: `218af6d`
 - S11C: `227a0ed`
+- S11D: `76cdbaf`
 
-Estado atual validado localmente: typecheck/lint/test verdes (229 testes).
+Estado atual validado localmente: typecheck/lint/test verdes (233 testes).
 
 ---
 
 ## Débitos conhecidos
 
-- Aceite de convite está parcialmente migrado: backend (S11C) já processa token; frontend ainda precisa migrar do fluxo local para endpoint remoto em S11D.
+- Fluxo de aceite agora usa endpoint remoto ponta a ponta (S11C + S11D). Próximo passo é hardening de segurança.
 - Hardening de segurança do fluxo remoto (hash/rate-limit/auditoria) pendente para S11E.
 - Preservação robusta de deep link em cenários de auth edge-case pode ser refinada em hardening.
 
