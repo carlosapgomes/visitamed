@@ -961,4 +961,21 @@ describe('sync-service - serializeNoteForFirestore', () => {
 
     expect(result.updatedAt).toBeUndefined();
   });
+
+  it('não deve incluir chaves undefined no payload serializado', () => {
+    const note = {
+      ...makeNote(),
+      reference: undefined,
+      tags: undefined,
+      updatedAt: undefined,
+      syncedAt: undefined,
+    };
+
+    const result = syncService.serializeNoteForFirestore(note);
+
+    expect(Object.hasOwn(result, 'reference')).toBe(false);
+    expect(Object.hasOwn(result, 'tags')).toBe(false);
+    expect(Object.hasOwn(result, 'updatedAt')).toBe(false);
+    expect(Object.hasOwn(result, 'syncedAt')).toBe(false);
+  });
 });

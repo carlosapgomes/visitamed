@@ -189,7 +189,7 @@ async function acceptMembership(visitId: string, userId: string, role: InviteRol
  * Endpoint autenticado para aceitar convite
  * Rota: POST /api/invites/accept
  */
-export const acceptInviteEndpoint = onRequest({ region: 'southamerica-east1' }, async (req: Request, res: Response) => {
+export const acceptInviteEndpointV2 = onRequest({ region: 'southamerica-east1' }, async (req: Request, res: Response) => {
   if (req.method === 'OPTIONS') {
     setCors(res);
     res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');

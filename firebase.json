@@ -13,7 +13,7 @@
       {
         "source": "/api/invites/accept",
         "function": {
-          "functionId": "acceptInviteEndpoint",
+          "functionId": "acceptInviteEndpointV2",
           "region": "southamerica-east1"
         }
       },

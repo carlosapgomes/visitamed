@@ -51,8 +51,15 @@ service cloud.firestore {
 
       // Subcoleção: members
       match /members/{memberUserId} {
-        // Read: membro ativo da visita
-        allow read: if isActiveMember(visitId, request.auth.uid);
+        // Get individual: membro ativo da visita OU leitura do próprio membership
+        allow get: if isActiveMember(visitId, request.auth.uid)
+          || (isSignedIn() && memberUserId == request.auth.uid);
+
+        // List/query (inclui collectionGroup):
+        // permite apenas memberships do próprio usuário autenticado
+        // (compatível com query por userId com/sem filtro de status)
+        allow list: if isSignedIn()
+          && resource.data.userId == request.auth.uid;
 
         // Create: owner OU bootstrap estrito do owner inicial
         allow create: if isOwner(visitId, request.auth.uid)
@@ -88,6 +95,16 @@ service cloud.firestore {
         // Read/write: apenas owner
         allow read, write: if isOwner(visitId, request.auth.uid);
       }
+    }
+
+    // ===============================
+    // Collection Group ACL (query)
+    // ===============================
+    // Necessário para permitir collectionGroup('members') no pull de hidratação.
+    // Permite somente memberships do próprio usuário autenticado.
+    match /{documentPath=**}/members/{memberUserId} {
+      allow get, list: if isSignedIn()
+        && resource.data.userId == request.auth.uid;
     }
 
     // ===============================

@@ -87,21 +87,36 @@ export function serializeNoteForFirestore(note: Note): SerializedNoteData {
 
   const now = new Date();
 
-  return {
+  const serialized: SerializedNoteData = {
     id: note.id,
     userId: note.userId,
     visitId: note.visitId,
     date: note.date,
     bed: note.bed,
-    reference: note.reference,
     note: note.note,
-    tags: note.tags,
     syncStatus: note.syncStatus,
     createdAt: normalizeDate(note.createdAt, now),
-    updatedAt: note.updatedAt ? normalizeDate(note.updatedAt, now) : undefined,
     expiresAt: normalizeDate(note.expiresAt, now),
-    syncedAt: note.syncedAt ? normalizeDate(note.syncedAt, now) : undefined,
   };
+
+  // Evitar campos undefined no payload Firestore (gera erro de serialização)
+  if (note.reference !== undefined) {
+    serialized.reference = note.reference;
+  }
+
+  if (note.tags !== undefined) {
+    serialized.tags = note.tags;
+  }
+
+  if (note.updatedAt !== undefined) {
+    serialized.updatedAt = normalizeDate(note.updatedAt, now);
+  }
+
+  if (note.syncedAt !== undefined) {
+    serialized.syncedAt = normalizeDate(note.syncedAt, now);
+  }
+
+  return serialized;
 }
 
 export interface SyncStatus {
@@ -469,6 +484,22 @@ async function processVisitSyncItem(item: SyncQueueItem, firestore: Firestore): 
       mode: visitPayload.mode,
       createdAt: serializeDateLikeToIso(visitPayload.createdAt),
       updatedAt: serializeDateLikeToIso(visitPayload.updatedAt),
+    },
+    { merge: true }
+  );
+
+  // Hardening: garantir membership owner remoto para evitar visitas órfãs sem ACL
+  const ownerMemberRef = doc(firestore, 'visits', visitPayload.id, 'members', visitPayload.userId);
+  await setDoc(
+    ownerMemberRef,
+    {
+      id: `${visitPayload.id}:${visitPayload.userId}`,
+      visitId: visitPayload.id,
+      userId: visitPayload.userId,
+      role: 'owner',
+      status: 'active',
+      createdAt: serializeDateLikeToIso(visitPayload.createdAt),
+      updatedAt: serializeDateLikeToIso(visitPayload.updatedAt ?? visitPayload.createdAt),
     },
     { merge: true }
   );
@@ -1321,7 +1352,8 @@ export async function pullRemoteVisitMembershipsAndVisits(): Promise<void> {
   }
 
   try {
-    // Query collectionGroup('members') com filtro por userId
+    // Query collectionGroup('members') por userId
+    // (status é filtrado localmente para evitar índice composto remoto obrigatório)
     const membersQuery = query(
       collectionGroup(firestore, 'members'),
       where('userId', '==', user.uid)
