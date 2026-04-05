@@ -186,6 +186,52 @@ export async function getVisitById(visitId: string): Promise<Visit | undefined> 
 }
 
 /**
+ * Exclui uma visita privada completa (visita + membership owner + notas)
+ */
+export async function deletePrivateVisit(visitId: string): Promise<void> {
+  const userId = requireUserId();
+
+  const visit = await db.visits.get(visitId);
+
+  if (!visit) {
+    throw new Error('Visita não encontrada');
+  }
+
+  if (visit.mode !== 'private') {
+    throw new Error('Apenas visitas privadas podem ser excluídas neste fluxo');
+  }
+
+  validateOwnership(visit, userId);
+
+  const ownerMember = await getVisitMember(visitId, userId);
+
+  if (!ownerMember || ownerMember.role !== 'owner') {
+    throw new Error('Acesso negado: somente owner pode excluir visita privada');
+  }
+
+  await db.transaction('rw', [db.visits, db.visitMembers, db.notes, db.syncQueue], async () => {
+    const notesToDelete = await db.notes.where('visitId').equals(visitId).toArray();
+
+    if (notesToDelete.length > 0) {
+      await db.notes.bulkDelete(notesToDelete.map((note) => note.id));
+
+      for (const note of notesToDelete) {
+        await queueNoteForSyncInTransaction('delete', note);
+      }
+    }
+
+    await db.visitMembers.delete(ownerMember.id);
+    await queueVisitMemberForSyncInTransaction('delete', ownerMember);
+
+    await db.visits.delete(visitId);
+    await queueVisitForSyncInTransaction('delete', visit);
+  });
+
+  // Sync imediato se online + autenticado (fire-and-forget)
+  triggerImmediateSync();
+}
+
+/**
  * Enfileira operação de sync para nota dentro de transação local
  */
 async function queueNoteForSyncInTransaction(

@@ -26,7 +26,7 @@ describe('dashboard-actions-policy', () => {
 
       const deleteAction = actions.find(a => a.id === 'delete');
       expect(deleteAction).toBeDefined();
-      expect(deleteAction?.label).toBe('Excluir');
+      expect(deleteAction?.label).toBe('Excluir notas');
     });
 
     it('deve incluir rótulos corretos', () => {
@@ -35,7 +35,7 @@ describe('dashboard-actions-policy', () => {
       expect(actions[0]).toEqual({ id: 'preview', label: 'Pré-visualizar' });
       expect(actions[1]).toEqual({ id: 'copy', label: 'Copiar mensagem' });
       expect(actions[2]).toEqual({ id: 'share', label: 'Compartilhar' });
-      expect(actions[3]).toEqual({ id: 'delete', label: 'Excluir' });
+      expect(actions[3]).toEqual({ id: 'delete', label: 'Excluir notas' });
     });
   });
 });

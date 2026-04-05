@@ -9,11 +9,13 @@ import { liveQuery, type Subscription } from 'dexie';
 import { navigate, getCurrentRoute } from '@/router/router';
 import { getAllNotes, deleteNotes } from '@/services/db/notes-service';
 import { getCurrentUserVisitMember } from '@/services/db/visit-members-service';
+import { getVisitById, deletePrivateVisit } from '@/services/db/visits-service';
 import { canEditNote, canDeleteNote, getVisitAccessState, type VisitAccessState } from '@/services/auth/visit-permissions';
 import { getDashboardGroupActions } from '@/services/auth/dashboard-actions-policy';
 import { groupNotesByDateAndTag } from '@/utils/group-notes-by-date-and-tag';
 import { generateMessage, copyToClipboard, type ExportScope } from '@/services/export/message-export';
 import type { Note } from '@/models/note';
+import type { Visit } from '@/models/visit';
 import type { VisitMember } from '@/models/visit-member';
 import type { TagGroupData } from '@/components/groups/date-group';
 import type { DashboardAction } from '@/services/auth/dashboard-actions-policy';
@@ -44,9 +46,11 @@ export class DashboardView extends LitElement {
   @state() private isPreviewOpen = false;
   @state() private previewMessage = '';
   @state() private member: VisitMember | null = null;
+  @state() private currentVisit: Visit | null = null;
   @state() private accessState: VisitAccessState = 'no-membership';
   @state() private actions: DashboardAction[] = [];
   @state() private isDeleteConfirmOpen = false;
+  @state() private isVisitDeleteConfirmOpen = false;
 
   private notesSubscription: Subscription | null = null;
 
@@ -61,7 +65,7 @@ export class DashboardView extends LitElement {
     const route = getCurrentRoute();
     if (route?.params['visitId']) {
       this.visitId = route.params['visitId'];
-      await this.loadMember();
+      await Promise.all([this.loadMember(), this.loadVisit()]);
     }
 
     this.startNotesSubscription();
@@ -82,6 +86,16 @@ export class DashboardView extends LitElement {
       this.member = null;
       this.accessState = 'no-membership';
       this.actions = getDashboardGroupActions(false);
+    }
+  }
+
+  private async loadVisit(): Promise<void> {
+    if (!this.visitId) return;
+
+    try {
+      this.currentVisit = (await getVisitById(this.visitId)) ?? null;
+    } catch {
+      this.currentVisit = null;
     }
   }
 
@@ -285,6 +299,36 @@ export class DashboardView extends LitElement {
     this.selectedScope = null;
   };
 
+  private canDeletePrivateVisit(): boolean {
+    return this.currentVisit?.mode === 'private' && this.member?.role === 'owner' && this.accessState === 'active';
+  }
+
+  private handleVisitDeleteClick = (): void => {
+    this.isVisitDeleteConfirmOpen = true;
+  };
+
+  private handleVisitDeleteCancel = (): void => {
+    this.isVisitDeleteConfirmOpen = false;
+  };
+
+  private handleVisitDeleteConfirm = async (): Promise<void> => {
+    if (!this.visitId) {
+      this.isVisitDeleteConfirmOpen = false;
+      return;
+    }
+
+    try {
+      await deletePrivateVisit(this.visitId);
+      this.showTemporaryToast('Visita excluída');
+      navigate('/dashboard');
+    } catch (error) {
+      console.error('Erro ao excluir visita privada:', error);
+      this.showTemporaryToast('Erro ao excluir visita');
+    } finally {
+      this.isVisitDeleteConfirmOpen = false;
+    }
+  };
+
   private showTemporaryToast(message: string): void {
     this.toastMessage = message;
     this.showToast = true;
@@ -401,6 +445,16 @@ export class DashboardView extends LitElement {
       <sync-status-bar></sync-status-bar>
 
       <main class="container-fluid wf-page-container wf-with-header-sync wf-sheet-safe pb-4">
+        ${this.canDeletePrivateVisit()
+          ? html`
+              <div class="mb-3 d-flex justify-content-end">
+                <button type="button" class="btn btn-outline-danger" @click=${this.handleVisitDeleteClick}>
+                  Excluir visita
+                </button>
+              </div>
+            `
+          : ''}
+
         ${this.isLoading
           ? html`<div class="d-flex align-items-center justify-content-center text-secondary" style="min-height: 50vh;">Carregando...</div>`
           : this.notes.length > 0
@@ -477,7 +531,7 @@ export class DashboardView extends LitElement {
         @sheet-closed=${this.handleSheetClosed}
       ></action-sheet>
 
-      ${this.renderToast()} ${this.renderDeleteConfirm()}
+      ${this.renderToast()} ${this.renderDeleteConfirm()} ${this.renderVisitDeleteConfirm()}
     `;
   }
 
@@ -505,7 +559,33 @@ export class DashboardView extends LitElement {
                   Cancelar
                 </button>
                 <button type="button" class="btn btn-danger" @click=${this.handleDeleteConfirm}>
-                  Excluir
+                  Excluir notas
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  private renderVisitDeleteConfirm() {
+    if (!this.isVisitDeleteConfirmOpen) return null;
+
+    return html`
+      <div class="modal-backdrop fade show"></div>
+      <div class="modal d-block" tabindex="-1" @click=${this.handleVisitDeleteCancel}>
+        <div class="modal-dialog modal-dialog-centered modal-sm" @click=${(e: Event) => { e.stopPropagation(); }}>
+          <div class="modal-content border-0 shadow">
+            <div class="modal-body p-4">
+              <h3 class="h6 mb-2">Excluir visita?</h3>
+              <p class="text-secondary mb-3">Esta visita privada e todas as suas notas serão excluídas.</p>
+              <div class="d-grid gap-2 d-sm-flex justify-content-end">
+                <button type="button" class="btn btn-outline-secondary" @click=${this.handleVisitDeleteCancel}>
+                  Cancelar
+                </button>
+                <button type="button" class="btn btn-danger" @click=${this.handleVisitDeleteConfirm}>
+                  Excluir visita
                 </button>
               </div>
             </div>

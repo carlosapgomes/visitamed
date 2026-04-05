@@ -22,7 +22,7 @@ export function getDashboardGroupActions(canDelete: boolean): DashboardAction[] 
   ];
 
   if (canDelete) {
-    baseActions.push({ id: 'delete', label: 'Excluir' });
+    baseActions.push({ id: 'delete', label: 'Excluir notas' });
   }
 
   return baseActions;

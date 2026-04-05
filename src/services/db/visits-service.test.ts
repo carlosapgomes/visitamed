@@ -4,7 +4,7 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { createOwnerVisitMember } from './visit-members-service';
-import { duplicateVisitAsPrivate } from './visits-service';
+import { duplicateVisitAsPrivate, deletePrivateVisit } from './visits-service';
 import type { Visit } from '@/models/visit';
 import type { Note } from '@/models/note';
 import type { VisitMember } from '@/models/visit-member';
@@ -19,6 +19,7 @@ vi.mock('./dexie-db', () => ({
     visits: {
       get: vi.fn(),
       add: vi.fn(),
+      delete: vi.fn(),
       where: vi.fn(() => ({
         equals: vi.fn(() => ({
           toArray: vi.fn().mockResolvedValue([]),
@@ -30,6 +31,7 @@ vi.mock('./dexie-db', () => ({
     visitMembers: {
       get: vi.fn(),
       add: vi.fn(),
+      delete: vi.fn(),
     },
     notes: {
       where: vi.fn(() => ({
@@ -38,6 +40,7 @@ vi.mock('./dexie-db', () => ({
         })),
       })),
       add: vi.fn(),
+      bulkDelete: vi.fn(),
     },
     syncQueue: {
       add: vi.fn(),
@@ -122,9 +125,9 @@ describe('duplicateVisitAsPrivate', () => {
 
   // Helpers para casts de tipo
   const mockDb = db as unknown as {
-    visits: { get: ReturnType<typeof vi.fn>; add: ReturnType<typeof vi.fn> };
-    visitMembers: { get: ReturnType<typeof vi.fn>; add: ReturnType<typeof vi.fn> };
-    notes: { where: ReturnType<typeof vi.fn>; add: ReturnType<typeof vi.fn> };
+    visits: { get: ReturnType<typeof vi.fn>; add: ReturnType<typeof vi.fn>; delete: ReturnType<typeof vi.fn> };
+    visitMembers: { get: ReturnType<typeof vi.fn>; add: ReturnType<typeof vi.fn>; delete: ReturnType<typeof vi.fn> };
+    notes: { where: ReturnType<typeof vi.fn>; add: ReturnType<typeof vi.fn>; bulkDelete: ReturnType<typeof vi.fn> };
     syncQueue: { add: ReturnType<typeof vi.fn> };
     transaction: ReturnType<typeof vi.fn>;
   };
@@ -289,12 +292,140 @@ describe('duplicateVisitAsPrivate', () => {
   });
 });
 
+describe('deletePrivateVisit', () => {
+  const mockUserId = 'user-owner';
+  const mockVisitId = 'visit-private-1';
+
+  const mockPrivateVisit: Visit = {
+    id: mockVisitId,
+    userId: mockUserId,
+    name: 'Visita privada',
+    date: '2026-04-05',
+    mode: 'private',
+    createdAt: new Date(),
+  };
+
+  const mockOwnerMember: VisitMember = {
+    id: `${mockVisitId}:${mockUserId}`,
+    visitId: mockVisitId,
+    userId: mockUserId,
+    role: 'owner',
+    status: 'active',
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+
+  const mockDb = db as unknown as {
+    visits: { get: ReturnType<typeof vi.fn>; delete: ReturnType<typeof vi.fn> };
+    visitMembers: { get: ReturnType<typeof vi.fn>; delete: ReturnType<typeof vi.fn> };
+    notes: { where: ReturnType<typeof vi.fn>; bulkDelete: ReturnType<typeof vi.fn> };
+    syncQueue: { add: ReturnType<typeof vi.fn> };
+    transaction: ReturnType<typeof vi.fn>;
+  };
+  const mockGetAuthStateFn = getAuthState as unknown as ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetAuthStateFn.mockReturnValue({ user: { uid: mockUserId } });
+    mockDb.visits.get.mockResolvedValue(mockPrivateVisit);
+    mockDb.visitMembers.get.mockResolvedValue(mockOwnerMember);
+    mockDb.visits.delete.mockResolvedValue(undefined);
+    mockDb.visitMembers.delete.mockResolvedValue(undefined);
+    mockDb.notes.bulkDelete.mockResolvedValue(undefined);
+  });
+
+  it('deve remover visita privada vazia e enfileirar deletes de visit/member', async () => {
+    mockDb.notes.where.mockReturnValue({
+      equals: vi.fn().mockReturnValue({
+        toArray: vi.fn().mockResolvedValue([]),
+      }),
+    } as { equals: ReturnType<typeof vi.fn> });
+
+    const queuedItems: unknown[] = [];
+    mockDb.syncQueue.add.mockImplementation((item: unknown) => {
+      queuedItems.push(item);
+    });
+
+    await deletePrivateVisit(mockVisitId);
+
+    expect(mockDb.notes.bulkDelete).not.toHaveBeenCalled();
+    expect(mockDb.visitMembers.delete).toHaveBeenCalledWith(`${mockVisitId}:${mockUserId}`);
+    expect(mockDb.visits.delete).toHaveBeenCalledWith(mockVisitId);
+
+    expect(queuedItems).toHaveLength(2);
+    expect(queuedItems.some((item) => (item as { entityType: string; operation: string }).entityType === 'visit-member' && (item as { operation: string }).operation === 'delete')).toBe(true);
+    expect(queuedItems.some((item) => (item as { entityType: string; operation: string }).entityType === 'visit' && (item as { operation: string }).operation === 'delete')).toBe(true);
+  });
+
+  it('deve remover visita privada com notas e enfileirar deletes de notas', async () => {
+    const visitNotes: Note[] = [
+      {
+        id: 'note-1',
+        userId: mockUserId,
+        visitId: mockVisitId,
+        date: '2026-04-05',
+        bed: '01',
+        note: 'Nota 1',
+        tags: ['UTI'],
+        createdAt: new Date(),
+        expiresAt: new Date(Date.now() + 1000),
+        syncStatus: 'synced',
+      },
+      {
+        id: 'note-2',
+        userId: mockUserId,
+        visitId: mockVisitId,
+        date: '2026-04-05',
+        bed: '02',
+        note: 'Nota 2',
+        tags: ['CLIN'],
+        createdAt: new Date(),
+        expiresAt: new Date(Date.now() + 1000),
+        syncStatus: 'synced',
+      },
+    ];
+
+    mockDb.notes.where.mockReturnValue({
+      equals: vi.fn().mockReturnValue({
+        toArray: vi.fn().mockResolvedValue(visitNotes),
+      }),
+    } as { equals: ReturnType<typeof vi.fn> });
+
+    const queuedItems: unknown[] = [];
+    mockDb.syncQueue.add.mockImplementation((item: unknown) => {
+      queuedItems.push(item);
+    });
+
+    await deletePrivateVisit(mockVisitId);
+
+    expect(mockDb.notes.bulkDelete).toHaveBeenCalledWith(['note-1', 'note-2']);
+    expect(queuedItems).toHaveLength(4);
+    expect(queuedItems.filter((item) => (item as { entityType: string }).entityType === 'note')).toHaveLength(2);
+    expect(queuedItems.some((item) => (item as { entityType: string }).entityType === 'visit-member')).toBe(true);
+    expect(queuedItems.some((item) => (item as { entityType: string }).entityType === 'visit')).toBe(true);
+  });
+
+  it('deve falhar para visita group', async () => {
+    mockDb.visits.get.mockResolvedValue({
+      ...mockPrivateVisit,
+      mode: 'group',
+    } as Visit);
+
+    await expect(deletePrivateVisit(mockVisitId)).rejects.toThrow('Apenas visitas privadas podem ser excluídas neste fluxo');
+  });
+});
+
 // Testes para createPrivateVisit com dedupe
 const { createPrivateVisit } = await import('./visits-service');
 
 describe('createPrivateVisit - nome opcional e dedupe', () => {
   const mockUserId = 'user-test';
   const currentDate = new Date().toISOString().split('T')[0];
+  const now = new Date();
+  const day = String(now.getDate()).padStart(2, '0');
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const year = now.getFullYear();
+  const currentDateLabel = `${day}-${month}-${String(year)}`;
 
   const mockDbVisitsWhere = {
     equals: vi.fn().mockReturnValue({
@@ -306,10 +437,11 @@ describe('createPrivateVisit - nome opcional e dedupe', () => {
     visits: {
       get: ReturnType<typeof vi.fn>;
       add: ReturnType<typeof vi.fn>;
+      delete: ReturnType<typeof vi.fn>;
       where: ReturnType<typeof vi.fn>;
     };
-    visitMembers: { get: ReturnType<typeof vi.fn>; add: ReturnType<typeof vi.fn> };
-    notes: { where: ReturnType<typeof vi.fn>; add: ReturnType<typeof vi.fn> };
+    visitMembers: { get: ReturnType<typeof vi.fn>; add: ReturnType<typeof vi.fn>; delete: ReturnType<typeof vi.fn> };
+    notes: { where: ReturnType<typeof vi.fn>; add: ReturnType<typeof vi.fn>; bulkDelete: ReturnType<typeof vi.fn> };
     syncQueue: { add: ReturnType<typeof vi.fn> };
     transaction: ReturnType<typeof vi.fn>;
   };
@@ -382,7 +514,7 @@ describe('createPrivateVisit - nome opcional e dedupe', () => {
     const existingVisit: Visit = {
       id: 'existing-visit',
       userId: mockUserId,
-      name: 'Plantão manhã 02-04-2026 privada',
+      name: `Plantão manhã ${currentDateLabel} privada`,
       date: currentDate,
       mode: 'private',
       createdAt: new Date(),
@@ -400,7 +532,7 @@ describe('createPrivateVisit - nome opcional e dedupe', () => {
     const result = await createPrivateVisit('Plantão manhã');
 
     expect(result.name).toContain('(2)');
-    expect(result.name).not.toBe('Plantão manhã 02-04-2026 privada');
+    expect(result.name).not.toBe(`Plantão manhã ${currentDateLabel} privada`);
   });
 
   it('deve adicionar sufixo (3) quando nomes (2) também existem', async () => {
@@ -410,7 +542,7 @@ describe('createPrivateVisit - nome opcional e dedupe', () => {
       {
         id: 'visit-1',
         userId: mockUserId,
-        name: 'Plantão manhã 02-04-2026 privada',
+        name: `Plantão manhã ${currentDateLabel} privada`,
         date: currentDate,
         mode: 'private',
         createdAt: new Date(),
@@ -418,7 +550,7 @@ describe('createPrivateVisit - nome opcional e dedupe', () => {
       {
         id: 'visit-2',
         userId: mockUserId,
-        name: 'Plantão manhã 02-04-2026 privada (2)',
+        name: `Plantão manhã ${currentDateLabel} privada (2)`,
         date: currentDate,
         mode: 'private',
         createdAt: new Date(),
