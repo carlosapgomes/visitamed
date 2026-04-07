@@ -3,6 +3,7 @@
  * Slice S11E - Hardening: token hash, rate-limit, auditoria
  */
 
+import { onDocumentWritten } from 'firebase-functions/v2/firestore';
 import { onRequest } from 'firebase-functions/v2/https';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import * as admin from 'firebase-admin';
@@ -508,11 +509,96 @@ export const deleteVisitEndpointV2 = onRequest({ region: 'southamerica-east1' },
   }
 });
 
+const NOTES_EXPIRATION_DERIVATION_REGION = 'southamerica-east1';
+const VISIT_NOTES_DOCUMENT_PATH = 'visits/{visitId}/notes/{noteId}';
 const CLEANUP_SCHEDULER_REGION = 'southamerica-east1';
 const CLEANUP_SCHEDULER_CRON = 'every 15 minutes';
 const EXPIRED_VISITS_BATCH_SIZE = 50;
 const NOTES_DELETE_BATCH_SIZE = 300;
 const MAX_CLEANUP_BATCH_ROUNDS = 20;
+
+function getLatestVisitExpirationFromNotesSnapshot(
+  notesSnapshot: FirebaseFirestore.QuerySnapshot
+): Date | null {
+  let latestExpiration: Date | null = null;
+
+  for (const noteDoc of notesSnapshot.docs) {
+    const expiresAt = parseDate(noteDoc.data()['expiresAt']);
+
+    if (!expiresAt) {
+      continue;
+    }
+
+    if (!latestExpiration || expiresAt > latestExpiration) {
+      latestExpiration = expiresAt;
+    }
+  }
+
+  return latestExpiration;
+}
+
+function isFirestoreNotFoundError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+
+  const code = (error as { code?: unknown }).code;
+  const message = (error as { message?: unknown }).message;
+
+  const codeMatches =
+    code === 5 ||
+    (typeof code === 'string' && (code.toLowerCase().includes('not-found') || code.toLowerCase() === '5'));
+
+  const messageMatches =
+    typeof message === 'string' &&
+    (message.toLowerCase().includes('not found') || message.toLowerCase().includes('no document to update'));
+
+  return codeMatches || messageMatches;
+}
+
+/**
+ * Deriva visit.expiresAt remoto a partir de /visits/{visitId}/notes.
+ * Não depende de visit:update client-side.
+ */
+export const deriveVisitExpirationFromNotes = onDocumentWritten(
+  {
+    document: VISIT_NOTES_DOCUMENT_PATH,
+    region: NOTES_EXPIRATION_DERIVATION_REGION,
+  },
+  async (event) => {
+    const visitId = event.params.visitId;
+
+    if (!visitId) {
+      return;
+    }
+
+    const visitRef = firestore.collection('visits').doc(visitId);
+    const visitSnap = await visitRef.get();
+
+    if (!visitSnap.exists) {
+      return;
+    }
+
+    const notesSnapshot = await visitRef.collection('notes').get();
+    const latestExpiration = getLatestVisitExpirationFromNotesSnapshot(notesSnapshot);
+    const nowTimestamp = admin.firestore.Timestamp.now();
+
+    try {
+      await visitRef.update({
+        expiresAt: latestExpiration
+          ? admin.firestore.Timestamp.fromDate(latestExpiration)
+          : nowTimestamp,
+        updatedAt: nowTimestamp,
+      });
+    } catch (error) {
+      if (isFirestoreNotFoundError(error)) {
+        return;
+      }
+
+      throw error;
+    }
+  }
+);
 
 async function deleteNotesByVisitId(visitId: string): Promise<number> {
   let deletedCount = 0;

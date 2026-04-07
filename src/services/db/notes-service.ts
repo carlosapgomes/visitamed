@@ -81,7 +81,11 @@ function getExpirationDate(baseDate: Date): Date {
   return expiresAt;
 }
 
-async function syncVisitExpirationInTransaction(visitId: string, expiresAt: Date): Promise<void> {
+/**
+ * Atualiza expiração da visita apenas no banco local.
+ * A derivação remota de visit.expiresAt é feita no backend a partir de /visits/{visitId}/notes.
+ */
+async function updateVisitExpirationLocallyInTransaction(visitId: string, expiresAt: Date): Promise<void> {
   const visit = await db.visits.get(visitId);
 
   if (!visit) {
@@ -95,9 +99,6 @@ async function syncVisitExpirationInTransaction(visitId: string, expiresAt: Date
   };
 
   await db.visits.put(updatedVisit);
-
-  const queueItem = createSyncQueueItem(visit.userId, 'update', 'visit', visit.id, updatedVisit);
-  await db.syncQueue.add(queueItem);
 }
 
 async function expireVisitWhenLastNoteIsRemovedInTransaction(visitId: string): Promise<void> {
@@ -107,7 +108,7 @@ async function expireVisitWhenLastNoteIsRemovedInTransaction(visitId: string): P
     return;
   }
 
-  await syncVisitExpirationInTransaction(visitId, new Date());
+  await updateVisitExpirationLocallyInTransaction(visitId, new Date());
 }
 
 /**
@@ -136,7 +137,7 @@ export async function saveNote(input: CreateNoteInput): Promise<Note> {
   await db.transaction('rw', db.notes, db.visits, db.syncQueue, async () => {
     await db.notes.add(note);
     await queueNoteForSyncInTransaction('create', note);
-    await syncVisitExpirationInTransaction(note.visitId, note.expiresAt);
+    await updateVisitExpirationLocallyInTransaction(note.visitId, note.expiresAt);
   });
 
   // Sync imediato se online + autenticado (fire-and-forget)
@@ -316,7 +317,7 @@ export async function updateNote(
 
     if (updatedNote) {
       await queueNoteForSyncInTransaction('update', updatedNote);
-      await syncVisitExpirationInTransaction(updatedNote.visitId, updatedNote.expiresAt);
+      await updateVisitExpirationLocallyInTransaction(updatedNote.visitId, updatedNote.expiresAt);
     }
   });
 
@@ -372,7 +373,7 @@ export async function removeTagFromNote(
       const updatedNote = await db.notes.get(noteId);
       if (updatedNote) {
         await queueNoteForSyncInTransaction('update', updatedNote);
-        await syncVisitExpirationInTransaction(updatedNote.visitId, updatedNote.expiresAt);
+        await updateVisitExpirationLocallyInTransaction(updatedNote.visitId, updatedNote.expiresAt);
       }
     }
   });

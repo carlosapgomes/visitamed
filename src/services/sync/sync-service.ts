@@ -862,6 +862,21 @@ async function handleSyncError(item: SyncQueueItem, error: unknown): Promise<voi
     item.entityType === 'visit-member' ||
     item.entityType === 'note';
 
+  // Hotfix: editor/viewer não têm permissão para update em /visits/{visitId}.
+  // Nesse caso, descartar apenas o item inválido da fila, sem purge local da visita.
+  if (
+    item.entityType === 'visit' &&
+    item.operation === 'update' &&
+    isPermissionDeniedError(error)
+  ) {
+    console.warn(
+      `[VisitaMed] Permission denied em visit:update (${item.entityId}). Descartando apenas item da fila, sem limpeza local.`
+    );
+
+    await db.syncQueue.delete(item.id);
+    return;
+  }
+
   if (visitId && isVisitScopedEntity && isVisitMissingOrInaccessibleError(error)) {
     console.warn(
       `[VisitaMed] Visita ${visitId} indisponível remotamente durante sync (${item.entityType}:${item.operation}). Limpando dados locais relacionados.`

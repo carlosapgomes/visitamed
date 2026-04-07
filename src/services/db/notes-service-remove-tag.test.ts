@@ -14,6 +14,10 @@ const mockVisitsPut = vi.fn();
 const mockSyncQueueAdd = vi.fn();
 const mockNotesWhere = vi.fn();
 
+function getQueuedEntityTypes(): string[] {
+  return mockSyncQueueAdd.mock.calls.map((call) => (call[0] as { entityType: string }).entityType);
+}
+
 vi.mock('./dexie-db', () => ({
   db: {
     notes: {
@@ -91,6 +95,7 @@ describe('notes-service - removeTagFromNote', () => {
     const updatedVisitPayload = mockVisitsPut.mock.calls[0]?.[0] as { id: string; expiresAt?: Date };
     expect(updatedVisitPayload.id).toBe('visit-123');
     expect(updatedVisitPayload.expiresAt).toBeInstanceOf(Date);
+    expect(getQueuedEntityTypes()).toEqual(['note']);
   });
 
   it('deve retornar "deleted" quando remove última tag', async () => {
@@ -144,6 +149,7 @@ describe('notes-service - removeTagFromNote', () => {
     const updatedVisit = mockVisitsPut.mock.calls[0]?.[0] as { id: string; expiresAt: Date };
     expect(updatedVisit.id).toBe('visit-123');
     expect(updatedVisit.expiresAt).toBeInstanceOf(Date);
+    expect(getQueuedEntityTypes()).toEqual(['note']);
   });
 
   it('deve lançar erro se nota não encontrada', async () => {
@@ -199,6 +205,7 @@ describe('notes-service - removeTagFromNote', () => {
     const updatedVisitPayload = mockVisitsPut.mock.calls[0]?.[0] as { id: string; expiresAt?: Date };
     expect(updatedVisitPayload.id).toBe('visit-123');
     expect(updatedVisitPayload.expiresAt).toBeInstanceOf(Date);
+    expect(getQueuedEntityTypes()).toEqual(['note']);
   });
 
   it('deve lançar erro se tag inválida (vazia)', async () => {

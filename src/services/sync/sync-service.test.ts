@@ -1118,7 +1118,112 @@ describe('sync-service - syncNow hardening para visita removida remotamente', ()
   const mockedGetFirebaseFirestore = vi.mocked(getFirebaseFirestore);
   const mockedSetDoc = vi.mocked(setDoc);
 
+  it('descarta apenas item visit:update com permission-denied sem purge local', async () => {
+    vi.clearAllMocks();
+
+    const mockedDb = db as unknown as {
+      transaction: ReturnType<typeof vi.fn>;
+      notes: { where: ReturnType<typeof vi.fn>; update: ReturnType<typeof vi.fn> };
+      visits: { delete: ReturnType<typeof vi.fn> };
+      visitMembers: { where: ReturnType<typeof vi.fn> };
+      visitInvites: { where: ReturnType<typeof vi.fn> };
+      syncQueue: {
+        where: ReturnType<typeof vi.fn>;
+        get: ReturnType<typeof vi.fn>;
+        update: ReturnType<typeof vi.fn>;
+        delete: ReturnType<typeof vi.fn>;
+        count: ReturnType<typeof vi.fn>;
+      };
+    };
+
+    mockedGetAuthState.mockReturnValue({
+      user: { uid: 'user-123' } as ReturnType<typeof getAuthState>['user'],
+      loading: false,
+      error: null,
+    });
+    mockedGetFirebaseFirestore.mockReturnValue({} as ReturnType<typeof getFirebaseFirestore>);
+
+    const visitQueueItem: SyncQueueItem = {
+      id: 'queue-visit-editor',
+      userId: 'user-123',
+      operation: 'update',
+      entityType: 'visit',
+      entityId: 'visit-shared',
+      payload: JSON.stringify({
+        id: 'visit-shared',
+        userId: 'user-123',
+        name: 'Visita compartilhada',
+        date: '2026-04-07',
+        mode: 'group',
+        createdAt: '2026-04-07T10:00:00.000Z',
+        expiresAt: '2026-04-15T10:00:00.000Z',
+        updatedAt: '2026-04-07T10:00:00.000Z',
+      }),
+      createdAt: new Date('2026-04-07T10:00:00.000Z'),
+      retryCount: 0,
+    };
+
+    const queueItems = [visitQueueItem];
+    const existingQueueIds = new Set(queueItems.map((item) => item.id));
+
+    mockedDb.syncQueue.where.mockImplementation(() => ({
+      equals: vi.fn(() => ({
+        sortBy: vi.fn().mockResolvedValue(queueItems),
+        toArray: vi.fn().mockResolvedValue(
+          queueItems.filter((item) => existingQueueIds.has(item.id))
+        ),
+      })),
+    }));
+
+    mockedDb.syncQueue.get.mockImplementation(((itemId: string) => (
+      queueItems.find((item) => item.id === itemId && existingQueueIds.has(item.id))
+    )) as never);
+
+    mockedDb.syncQueue.delete.mockImplementation((itemId: string) => {
+      existingQueueIds.delete(itemId);
+    });
+
+    mockedDb.syncQueue.count.mockResolvedValue(0);
+
+    const notesDeleteByVisitId = vi.fn((_visitId: string) => Promise.resolve(0));
+    const membersDeleteByVisitId = vi.fn((_visitId: string) => Promise.resolve(0));
+    const invitesDeleteByVisitId = vi.fn((_visitId: string) => Promise.resolve(0));
+
+    mockedDb.notes.where.mockImplementation(() => ({
+      equals: vi.fn((visitId: string) => ({
+        delete: () => notesDeleteByVisitId(visitId),
+      })),
+    }));
+
+    mockedDb.visitMembers.where.mockImplementation(() => ({
+      equals: vi.fn((visitId: string) => ({
+        delete: () => membersDeleteByVisitId(visitId),
+      })),
+    }));
+
+    mockedDb.visitInvites.where.mockImplementation(() => ({
+      equals: vi.fn((visitId: string) => ({
+        delete: () => invitesDeleteByVisitId(visitId),
+      })),
+    }));
+
+    mockedSetDoc.mockRejectedValueOnce(new Error('permission-denied'));
+
+    await syncService.syncNow();
+
+    expect(mockedSetDoc).toHaveBeenCalledTimes(1);
+    expect(notesDeleteByVisitId).not.toHaveBeenCalled();
+    expect(membersDeleteByVisitId).not.toHaveBeenCalled();
+    expect(invitesDeleteByVisitId).not.toHaveBeenCalled();
+    expect(mockedDb.visits.delete).not.toHaveBeenCalled();
+    expect(mockedDb.syncQueue.delete).toHaveBeenCalledWith('queue-visit-editor');
+    expect(mockedDb.syncQueue.update).not.toHaveBeenCalled();
+    expect(existingQueueIds.size).toBe(0);
+  });
+
   it('descarta dados locais e fila da visita sem retry inútil quando recebe not-found', async () => {
+    vi.clearAllMocks();
+
     const mockedDb = db as unknown as {
       transaction: ReturnType<typeof vi.fn>;
       notes: { where: ReturnType<typeof vi.fn>; update: ReturnType<typeof vi.fn> };

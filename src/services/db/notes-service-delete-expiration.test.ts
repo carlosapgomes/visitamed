@@ -12,6 +12,10 @@ const mockSyncQueueAdd = vi.fn();
 const mockVisitsGet = vi.fn();
 const mockVisitsPut = vi.fn();
 
+function getQueuedEntityTypes(): string[] {
+  return mockSyncQueueAdd.mock.calls.map((call) => (call[0] as { entityType: string }).entityType);
+}
+
 vi.mock('./dexie-db', () => ({
   db: {
     notes: {
@@ -93,6 +97,7 @@ describe('notes-service - expiração da visita em deleções', () => {
     const updatedVisit = mockVisitsPut.mock.calls[0]?.[0] as { id: string; expiresAt: Date };
     expect(updatedVisit.id).toBe('visit-1');
     expect(updatedVisit.expiresAt).toBeInstanceOf(Date);
+    expect(getQueuedEntityTypes()).toEqual(['note']);
   });
 
   it('deleteNotes expira visita quando remove todas as notas restantes', async () => {
@@ -163,5 +168,6 @@ describe('notes-service - expiração da visita em deleções', () => {
     const updatedVisit = mockVisitsPut.mock.calls[0]?.[0] as { id: string; expiresAt: Date };
     expect(updatedVisit.id).toBe('visit-1');
     expect(updatedVisit.expiresAt).toBeInstanceOf(Date);
+    expect(getQueuedEntityTypes()).toEqual(['note', 'note']);
   });
 });
