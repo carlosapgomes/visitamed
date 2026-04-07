@@ -10,6 +10,7 @@ import type { SyncQueueItem } from '@/models/sync-queue';
 import type { Visit } from '@/models/visit';
 import type { VisitMember } from '@/models/visit-member';
 import type { VisitInvite } from '@/models/visit-invite';
+import type { UserTagStat } from '@/models/user-tag-stat';
 import {
   cleanExpiredLocalDataFromDb,
   type LocalExpirationCleanupResult,
@@ -25,6 +26,7 @@ class VisitaMedDB extends Dexie {
   visits!: EntityTable<Visit, 'id'>;
   visitMembers!: EntityTable<VisitMember, 'id'>;
   visitInvites!: EntityTable<VisitInvite, 'id'>;
+  userTagStats!: EntityTable<UserTagStat, 'id'>;
 
   constructor() {
     super('VisitaMedDB');
@@ -50,24 +52,63 @@ class VisitaMedDB extends Dexie {
         // Limpa syncQueue para iniciar limpo
         await tx.table('syncQueue').clear();
       });
+
+    // v9: base local de sugestões de tags por usuário
+    this.version(9).stores({
+      notes: 'id, userId, visitId, date, syncStatus, expiresAt',
+      settings: 'id, userId',
+      syncQueue: 'id, userId, entityType, entityId, createdAt',
+      visits: 'id, userId, date, expiresAt',
+      visitMembers: 'id, visitId, userId, role, status, updatedAt',
+      visitInvites: 'id, visitId, createdByUserId, token, role, expiresAt, createdAt, revokedAt',
+      userTagStats: 'id, userId, tag, count, lastUsedAt, updatedAt',
+    });
   }
 }
 
 export const db = new VisitaMedDB();
+
+export interface ClearLocalUserDataDb {
+  notes: { clear(): Promise<void> };
+  settings: { clear(): Promise<void> };
+  syncQueue: { clear(): Promise<void> };
+  visits: { clear(): Promise<void> };
+  visitMembers: { clear(): Promise<void> };
+  visitInvites: { clear(): Promise<void> };
+  userTagStats: { clear(): Promise<void> };
+  transaction(...args: unknown[]): Promise<unknown>;
+}
+
+export async function clearLocalUserDataFromDb(database: ClearLocalUserDataDb): Promise<void> {
+  await database.transaction(
+    'rw',
+    [
+      database.notes,
+      database.settings,
+      database.syncQueue,
+      database.visits,
+      database.visitMembers,
+      database.visitInvites,
+      database.userTagStats,
+    ],
+    async () => {
+      await database.notes.clear();
+      await database.settings.clear();
+      await database.syncQueue.clear();
+      await database.visits.clear();
+      await database.visitMembers.clear();
+      await database.visitInvites.clear();
+      await database.userTagStats.clear();
+    }
+  );
+}
 
 /**
  * Limpa dados locais do usuário
  * Usado no logout para evitar dados órfãos em dispositivo compartilhado
  */
 export async function clearLocalUserData(): Promise<void> {
-  await db.transaction('rw', [db.notes, db.settings, db.syncQueue, db.visits, db.visitMembers, db.visitInvites], async () => {
-    await db.notes.clear();
-    await db.settings.clear();
-    await db.syncQueue.clear();
-    await db.visits.clear();
-    await db.visitMembers.clear();
-    await db.visitInvites.clear();
-  });
+  await clearLocalUserDataFromDb(db);
 }
 
 /**
