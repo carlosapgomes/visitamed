@@ -25,7 +25,12 @@ Além disso, o ciclo de **expiração de notas/visitas** foi implementado em 4 s
 4. hardening de sync/convergência após cleanup backend
 5. correção estrutural: o backend agora deriva `visit.expiresAt` remoto a partir das notas da visita
 
-No momento, o projeto está em estado bem mais consistente para colaboração + lifecycle de visitas transitórias.
+Além disso, a feature de **sugestões locais de tags por usuário** já está implementada em 3 slices:
+1. fundação local com tabela materializada `userTagStats`
+2. UI em `new-note-view` com top tags + filtro por prefixo
+3. rebuild automático best-effort após eventos locais/remotos relevantes
+
+No momento, o projeto está em estado bem mais consistente para colaboração + lifecycle de visitas transitórias, com preenchimento de tags também mais assistido.
 
 ---
 
@@ -79,6 +84,17 @@ Estado atual:
 - backend também mantém `visit.expiresAt` remoto derivado das notas da visita
 - sync foi endurecido para convergir melhor após cleanup remoto e evitar retries inúteis
 
+### 6) Sugestões locais de tags
+Estado atual:
+- cada usuário possui uma tabela local materializada `userTagStats`
+- as sugestões consideram tags de **todas as notas** das visitas localmente acessíveis ao usuário, inclusive visitas compartilhadas
+- consideram apenas visitas/notas ativas
+- `new-note-view` mostra:
+  - top tags
+  - filtro por prefixo com base no fragmento após a última vírgula
+  - chips clicáveis para adicionar a sugestão
+- as estatísticas locais são mantidas automaticamente por rebuild best-effort após mutações locais, sync remoto, realtime, limpeza por expiração e mudanças de acesso/visita
+
 ---
 
 ## Commits relevantes mais recentes
@@ -88,6 +104,11 @@ Estado atual:
 - `2647662` fix(types): restore green build for expiration cleanup
 - `baa0700` fix(sync): converge local cleanup after expired visit removal
 - `c884357` feat(expiration): add visit lifecycle and cleanup flows
+
+### Sugestões de tags
+- `6e2241a` feat(tags): keep local tag suggestions in sync
+- `eab8a46` feat(tags): add local tag suggestions to note form
+- `c2b0e54` feat(tags): add local user tag suggestion stats
 
 ### Colaboração / convites
 - `97846dc` fix(collab): harden leave flow and invite accept hydration
@@ -211,6 +232,56 @@ Resumo:
   mas **não enfileira mais `visit:update` remoto derivado de mutação de nota**
 - isso remove o acoplamento errado que fazia `editor` gerar `permission-denied` ao tentar atualizar `/visits/{visitId}`
 
+### H) Sugestões de tags — Slice 1: fundação local
+Arquivos principais:
+- `src/models/user-tag-stat.ts`
+- `src/services/db/dexie-db.ts`
+- `src/services/db/user-tag-stats-service.ts`
+- testes de `user-tag-stats-service`
+
+Resumo:
+- nova tabela local `userTagStats`
+- estatísticas materializadas por usuário (`id`, `userId`, `tag`, `count`, `lastUsedAt`, `updatedAt`)
+- rebuild completo simples a partir das visitas/notas locais acessíveis e ativas
+- leitura de top sugestões e busca por prefixo
+- `clearLocalUserData()` também limpa `userTagStats`
+
+### I) Sugestões de tags — Slice 2: UI em `new-note-view`
+Arquivos principais:
+- `src/views/new-note-view.ts`
+- `src/views/new-note-tag-suggestions.ts`
+- `src/views/new-note-tag-suggestions.test.ts`
+
+Resumo:
+- `new-note-view` mostra chips de sugestões abaixo do campo de tags
+- sem prefixo útil, mostra top tags do usuário
+- com prefixo útil, busca pelo fragmento após a última vírgula
+- clicar em um chip:
+  - adiciona a sugestão
+  - preserva tags completas já digitadas antes da última vírgula
+  - evita duplicatas
+  - limpa o input
+- fluxo atual de `Adicionar` / `Enter` continua válido
+
+### J) Sugestões de tags — Slice 3: rebuild automático
+Arquivos principais:
+- `src/services/db/user-tag-stats-service.ts`
+- `src/services/db/notes-service.ts`
+- `src/services/db/visits-service.ts`
+- `src/services/db/dexie-db.ts`
+- `src/services/sync/sync-service.ts`
+
+Resumo:
+- helper central `triggerCurrentUserTagStatsRebuild()`
+- rebuild best-effort após:
+  - `saveNote`, `updateNote`, `deleteNote`, `deleteNotes`, `removeTagFromNote`
+  - `deletePrivateVisit`, `leaveVisit`, `deleteGroupVisitAsOwner`
+  - cleanup local por expiração
+  - `pullRemoteNotes`, `pullRemoteVisitMembershipsAndVisits`
+  - realtime da visita ativa
+- falha no rebuild não quebra UI nem sync
+- `new-note-view` pode manter rebuild ao abrir como fallback seguro
+
 ---
 
 ## Deploys / infraestrutura já aplicados
@@ -219,12 +290,13 @@ Resumo:
 Deploys recentes executados com sucesso:
 ```bash
 firebase deploy --only hosting,functions --project visitamed-36570 --force
+firebase deploy --only hosting --project visitamed-36570 --force
 ```
 
 Resultados importantes:
 - `cleanupExpiredVisitsScheduler(southamerica-east1)` criado com sucesso
 - `deriveVisitExpirationFromNotes(southamerica-east1)` criado com sucesso
-- hosting publicado em `https://visitamed-36570.web.app`
+- hosting publicado/atualizado em `https://visitamed-36570.web.app`
 
 ### APIs / serviços habilitados no projeto
 Durante o deploy do scheduler, o Firebase habilitou:
@@ -258,6 +330,20 @@ Se houver dúvida operacional, confirmar no Firebase Console se o índice de `in
   - `lint` ✅
   - `test` ✅
   - `npm --prefix functions run build` ✅
+
+### Sugestões de tags
+- Slice 1 (fundação local):
+  - `typecheck` ✅
+  - `lint` ✅
+  - `test` ✅
+- Slice 2 (UI em `new-note-view`):
+  - `typecheck` ✅
+  - `lint` ✅
+  - `test` ✅
+- Slice 3 (rebuild automático):
+  - `typecheck` ✅
+  - `lint` ✅
+  - `test` ✅
 - Build final local antes do deploy:
   - `npm run build` ✅
   - `npm --prefix functions run build` ✅
@@ -291,6 +377,18 @@ Se houver dúvida operacional, confirmar no Firebase Console se o índice de `in
 - `src/views/visits-view.ts`
 - `functions/src/index.ts`
 
+### Sugestões de tags
+- `src/models/user-tag-stat.ts`
+- `src/services/db/user-tag-stats-service.ts`
+- `src/services/db/user-tag-stats-service.test.ts`
+- `src/views/new-note-tag-suggestions.ts`
+- `src/views/new-note-tag-suggestions.test.ts`
+- `src/views/new-note-view.ts`
+- `src/services/db/notes-service.ts`
+- `src/services/db/visits-service.ts`
+- `src/services/sync/sync-service.ts`
+- `src/services/db/dexie-db.ts`
+
 ---
 
 ## Próximos ajustes / features prováveis
@@ -314,12 +412,14 @@ Para confirmar:
 - se não houve erro inesperado de Eventarc/trigger/permite
 - se o volume de logs está razoável
 
-### 3) UX do campo de tags na nova nota
+### 3) Refinamentos futuros da UX de tags
 Possíveis refinamentos futuros:
 - auto-add no blur
 - auto-add ao salvar
 - texto de ajuda mais explícito
 - feedback melhor do motivo do botão `Salvar` desabilitado
+- debounce/coalescing simples se o rebuild automático de sugestões ficar frequente demais
+- pequenos ajustes visuais nos chips/sugestões conforme uso real
 
 ### 4) Gestão visual de membros/convites
 Possíveis próximos slices:
@@ -365,4 +465,4 @@ Observações:
 1. Ler este arquivo.
 2. Rodar smoke test manual focado em colaboração + expiração.
 3. Ver logs do `cleanupExpiredVisitsScheduler` após as primeiras execuções.
-4. Se tudo estiver estável, priorizar refinamentos de UX e gestão de membros/convites.
+4. Se tudo estiver estável, priorizar refinamentos de UX, principalmente tags, e gestão de membros/convites.
