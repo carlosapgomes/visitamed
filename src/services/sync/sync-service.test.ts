@@ -103,7 +103,7 @@ import { type SyncQueueItem } from '@/models/sync-queue';
 import { getAuthState } from '@/services/auth/auth-service';
 import { getFirebaseFirestore } from '@/services/auth/firebase';
 import { db } from '@/services/db/dexie-db';
-import { collection, collectionGroup, query, where, getDocs, doc, getDoc, setDoc } from 'firebase/firestore';
+import { collection, collectionGroup, query, where, getDocs, doc, getDoc, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { triggerCurrentUserTagStatsRebuild } from '@/services/db/user-tag-stats-service';
 
 // Removido: FirestoreWardStatData (tags-first)
@@ -1610,6 +1610,152 @@ describe('sync-service - syncNow hardening para visita removida remotamente', ()
     expect(mockedDb.syncQueue.delete).toHaveBeenCalledWith('queue-member-b');
     expect(mockedDb.syncQueue.update).not.toHaveBeenCalled();
     expect(existingQueueIds.size).toBe(0);
+  });
+});
+
+describe('sync-service - syncNow push primário de notas em visitas', () => {
+  const mockedGetAuthState = vi.mocked(getAuthState);
+  const mockedGetFirebaseFirestore = vi.mocked(getFirebaseFirestore);
+  const mockedDoc = vi.mocked(doc);
+  const mockedSetDoc = vi.mocked(setDoc);
+  const mockedUpdateDoc = vi.mocked(updateDoc);
+  const mockedDeleteDoc = vi.mocked(deleteDoc);
+
+  const mockedDb = db as unknown as {
+    notes: {
+      update: ReturnType<typeof vi.fn>;
+    };
+    visitMembers: {
+      where: ReturnType<typeof vi.fn>;
+    };
+    syncQueue: {
+      where: ReturnType<typeof vi.fn>;
+      get: ReturnType<typeof vi.fn>;
+      delete: ReturnType<typeof vi.fn>;
+      count: ReturnType<typeof vi.fn>;
+      update: ReturnType<typeof vi.fn>;
+    };
+  };
+
+  function makeNotePayload(): Note {
+    return {
+      id: 'note-1',
+      userId: 'user-123',
+      visitId: 'visit-1',
+      date: '2026-04-08',
+      bed: '01',
+      note: 'Nota de teste',
+      tags: ['UTI'],
+      syncStatus: 'pending',
+      createdAt: new Date('2026-04-08T10:00:00.000Z'),
+      updatedAt: new Date('2026-04-08T11:00:00.000Z'),
+      expiresAt: new Date('2026-04-22T10:00:00.000Z'),
+    };
+  }
+
+  function setupSyncNowForSingleNoteOperation(operation: SyncQueueItem['operation']): void {
+    vi.clearAllMocks();
+
+    mockedGetAuthState.mockReturnValue({
+      user: { uid: 'user-123' } as ReturnType<typeof getAuthState>['user'],
+      loading: false,
+      error: null,
+    });
+    mockedGetFirebaseFirestore.mockReturnValue({} as ReturnType<typeof getFirebaseFirestore>);
+    mockedDoc.mockReturnValue({} as ReturnType<typeof doc>);
+    mockedSetDoc.mockResolvedValue(undefined);
+    mockedUpdateDoc.mockResolvedValue(undefined);
+    mockedDeleteDoc.mockResolvedValue(undefined);
+    mockedDb.notes.update.mockResolvedValue(undefined);
+
+    // Evita bootstrap owner no teste para focar no push primário de nota.
+    mockedDb.visitMembers.where.mockImplementation(() => ({
+      toArray: vi.fn().mockResolvedValue([]),
+    }));
+
+    const queueItem: SyncQueueItem = {
+      id: `queue-note-${operation}`,
+      userId: 'user-123',
+      operation,
+      entityType: 'note',
+      entityId: 'note-1',
+      payload: JSON.stringify(makeNotePayload()),
+      createdAt: new Date('2026-04-08T12:00:00.000Z'),
+      retryCount: 0,
+    };
+
+    const queueItems = [queueItem];
+    const existingQueueIds = new Set(queueItems.map((item) => item.id));
+
+    mockedDb.syncQueue.where.mockImplementation(() => ({
+      equals: vi.fn(() => ({
+        sortBy: vi.fn().mockResolvedValue(queueItems),
+      })),
+    }));
+
+    mockedDb.syncQueue.get.mockImplementation(((itemId: string) => (
+      queueItems.find((item) => item.id === itemId && existingQueueIds.has(item.id))
+    )) as never);
+
+    mockedDb.syncQueue.delete.mockImplementation((itemId: string) => {
+      existingQueueIds.delete(itemId);
+    });
+
+    mockedDb.syncQueue.count.mockResolvedValue(0);
+    mockedDb.syncQueue.update.mockResolvedValue(undefined);
+  }
+
+  it('note:create escreve em /visits/{visitId}/notes/{noteId} e não em /users/{uid}/notes', async () => {
+    setupSyncNowForSingleNoteOperation('create');
+
+    await syncService.syncNow();
+
+    expect(mockedDoc).toHaveBeenCalledWith(expect.anything(), 'visits', 'visit-1', 'notes', 'note-1');
+    expect(mockedDoc).not.toHaveBeenCalledWith(expect.anything(), 'users', 'user-123', 'notes', 'note-1');
+    expect(mockedSetDoc).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        id: 'note-1',
+        visitId: 'visit-1',
+      })
+    );
+    expect(mockedDb.notes.update).toHaveBeenCalledWith(
+      'note-1',
+      expect.objectContaining({ syncStatus: 'synced' })
+    );
+    expect(mockedDb.syncQueue.delete).toHaveBeenCalledWith('queue-note-create');
+    expect(syncService.getSyncStatus().pendingCount).toBe(0);
+  });
+
+  it('note:update atualiza a nota em /visits/{visitId}/notes/{noteId}', async () => {
+    setupSyncNowForSingleNoteOperation('update');
+
+    await syncService.syncNow();
+
+    expect(mockedDoc).toHaveBeenCalledWith(expect.anything(), 'visits', 'visit-1', 'notes', 'note-1');
+    expect(mockedDoc).not.toHaveBeenCalledWith(expect.anything(), 'users', 'user-123', 'notes', 'note-1');
+    expect(mockedUpdateDoc).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ id: 'note-1', visitId: 'visit-1' })
+    );
+    expect(mockedSetDoc).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      { merge: true }
+    );
+    expect(mockedDb.syncQueue.delete).toHaveBeenCalledWith('queue-note-update');
+  });
+
+  it('note:delete remove a nota em /visits/{visitId}/notes/{noteId}', async () => {
+    setupSyncNowForSingleNoteOperation('delete');
+
+    await syncService.syncNow();
+
+    expect(mockedDoc).toHaveBeenCalledWith(expect.anything(), 'visits', 'visit-1', 'notes', 'note-1');
+    expect(mockedDoc).not.toHaveBeenCalledWith(expect.anything(), 'users', 'user-123', 'notes', 'note-1');
+    expect(mockedDeleteDoc).toHaveBeenCalledTimes(1);
+    expect(mockedDb.notes.update).not.toHaveBeenCalled();
+    expect(mockedDb.syncQueue.delete).toHaveBeenCalledWith('queue-note-delete');
   });
 });
 

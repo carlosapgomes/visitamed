@@ -699,44 +699,41 @@ async function bootstrapVisitForOwner(
 }
 
 /**
- * Faz mirror best-effort de nota para /visits/{visitId}/notes/{noteId}
+ * Cria nota no caminho remoto principal /visits/{visitId}/notes/{noteId}
  */
-async function mirrorNoteToVisit(
+async function createVisitNote(
   firestore: Firestore,
   visitId: string,
   noteId: string,
-  noteData: DocumentData
+  noteData: SerializedNoteData
 ): Promise<void> {
-  if (!visitId) {
-    return;
-  }
-
-  try {
-    const visitNoteRef = doc(firestore, 'visits', visitId, 'notes', noteId);
-    await setDoc(visitNoteRef, noteData, { merge: true });
-  } catch (error) {
-    console.warn(`[VisitaMed] Mirror de nota ${noteId} para visita ${visitId} falhou (best-effort):`, error);
-  }
+  const visitNoteRef = doc(firestore, 'visits', visitId, 'notes', noteId);
+  await setDoc(visitNoteRef, noteData);
 }
 
 /**
- * Remove nota espelhada da visita (best-effort)
+ * Atualiza nota no caminho remoto principal /visits/{visitId}/notes/{noteId}
  */
-async function deleteMirroredVisitNote(
+async function updateVisitNote(
+  firestore: Firestore,
+  visitId: string,
+  noteId: string,
+  noteData: SerializedNoteData
+): Promise<void> {
+  const visitNoteRef = doc(firestore, 'visits', visitId, 'notes', noteId);
+  await updateDoc(visitNoteRef, noteData as unknown as UpdateData<DocumentData>);
+}
+
+/**
+ * Remove nota do caminho remoto principal /visits/{visitId}/notes/{noteId}
+ */
+async function deleteVisitNote(
   firestore: Firestore,
   visitId: string,
   noteId: string
 ): Promise<void> {
-  if (!visitId) {
-    return;
-  }
-
-  try {
-    const visitNoteRef = doc(firestore, 'visits', visitId, 'notes', noteId);
-    await deleteDoc(visitNoteRef);
-  } catch (error) {
-    console.warn(`[VisitaMed] Delete do mirror da nota ${noteId} na visita ${visitId} falhou (best-effort):`, error);
-  }
+  const visitNoteRef = doc(firestore, 'visits', visitId, 'notes', noteId);
+  await deleteDoc(visitNoteRef);
 }
 
 /**
@@ -751,48 +748,37 @@ async function processNoteSyncItem(item: SyncQueueItem, firestore: Firestore): P
     throw new Error('Payload inválido na fila de sincronização');
   }
 
-  // Serializar note com timestamps normalizados para Firestore
-  const noteData = serializeNoteForFirestore(notePayload);
-  const noteRef = doc(firestore, 'users', item.userId, 'notes', item.entityId);
-
-  // === SYNC LEGADO (sempre executa) ===
-  if (item.operation === 'create') {
-    await setDoc(noteRef, noteData);
-  }
-
-  if (item.operation === 'update') {
-    // Sem fallback setDoc merge - erro será tratado em handleSyncError
-    await updateDoc(noteRef, noteData as unknown as UpdateData<DocumentData>);
-  }
-
-  if (item.operation === 'delete') {
-    await deleteDoc(noteRef);
+  const visitId = notePayload.visitId.trim();
+  if (!visitId) {
+    throw new Error('Payload inválido na fila de sincronização de nota: visitId ausente');
   }
 
   // === BOOTSTRAP PARA OWNER LOCAL (best-effort) ===
-  if (item.operation !== 'delete' && notePayload.visitId) {
+  // Mantido como suporte ao documento da visita/membership owner.
+  if (item.operation !== 'delete') {
     const activeMemberships = await getActiveMemberships(item.userId);
     const ownerMembership = activeMemberships.find(
-      (m) => m.visitId === notePayload.visitId && m.role === 'owner'
+      (m) => m.visitId === visitId && m.role === 'owner'
     );
 
     if (ownerMembership) {
-      await bootstrapVisitForOwner(firestore, notePayload.visitId, item.userId);
+      await bootstrapVisitForOwner(firestore, visitId, item.userId);
     }
   }
 
-  // === MIRROR PARA VISITA (best-effort) ===
-  if (notePayload.visitId) {
-    if (item.operation === 'delete') {
-      await deleteMirroredVisitNote(firestore, notePayload.visitId, item.entityId);
-    } else {
-      await mirrorNoteToVisit(
-        firestore,
-        notePayload.visitId,
-        item.entityId,
-        noteData
-      );
-    }
+  // Serializar note com timestamps normalizados para Firestore
+  const noteData = serializeNoteForFirestore(notePayload);
+
+  if (item.operation === 'create') {
+    await createVisitNote(firestore, visitId, item.entityId, noteData);
+  }
+
+  if (item.operation === 'update') {
+    await updateVisitNote(firestore, visitId, item.entityId, noteData);
+  }
+
+  if (item.operation === 'delete') {
+    await deleteVisitNote(firestore, visitId, item.entityId);
   }
 
   if (item.operation !== 'delete') {
@@ -895,7 +881,7 @@ async function handleSyncError(item: SyncQueueItem, error: unknown): Promise<voi
     return;
   }
 
-  // Fallback legado para nota sem visitId associada
+  // Fallback defensivo para payload inconsistente de nota
   if (item.entityType === 'note' && isPermissionDeniedError(error)) {
     console.warn(
       `[VisitaMed] Permission denied para nota ${item.entityId}: descartando dados locais`
