@@ -4,7 +4,13 @@
  */
 
 import { db } from './dexie-db';
-import { createVisit, generatePrivateVisitName, getCurrentDate, type Visit } from '@/models/visit';
+import {
+  createVisit,
+  generatePrivateVisitName,
+  getCurrentDate,
+  normalizeLegacyPrivateVisitName,
+  type Visit,
+} from '@/models/visit';
 import { createNote, type Note } from '@/models/note';
 import { createSyncQueueItem, type SyncQueueItem } from '@/models/sync-queue';
 import { normalizeTagList } from '@/models/tag';
@@ -318,8 +324,10 @@ export async function ensureVisitIsGroup(visitId: string): Promise<Visit> {
   }
 
   const now = new Date();
+  const normalizedName = normalizeLegacyPrivateVisitName(visit.name);
   const updatedVisit: Visit = {
     ...visit,
+    name: normalizedName,
     mode: 'group',
     updatedAt: now,
   };

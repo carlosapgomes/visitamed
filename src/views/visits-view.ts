@@ -124,6 +124,14 @@ export class VisitsView extends LitElement {
     return `${day}-${month}-${year}`;
   }
 
+  private getVisitModeLabel(visit: Visit): string {
+    return visit.mode === 'group' ? 'Compartilhada' : 'Privada';
+  }
+
+  private getVisitModeBadgeClass(visit: Visit): string {
+    return visit.mode === 'group' ? 'text-bg-primary' : 'text-bg-secondary';
+  }
+
   private renderNameModal() {
     if (!this.showNameModal) return null;
 
@@ -216,7 +224,10 @@ export class VisitsView extends LitElement {
               <div class="card-body py-3">
                 <div class="d-flex justify-content-between align-items-center">
                   <div>
-                    <div class="fw-semibold">${visit.name}</div>
+                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                      <div class="fw-semibold">${visit.name}</div>
+                      <span class="badge ${this.getVisitModeBadgeClass(visit)}">${this.getVisitModeLabel(visit)}</span>
+                    </div>
                     <div class="text-secondary small">${this.formatDateForDisplay(visit.date)}</div>
                   </div>
                   <svg class="text-secondary" width="20" height="20" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">

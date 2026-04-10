@@ -32,7 +32,7 @@ Além disso, a feature de **sugestões locais de tags por usuário** já está i
 
 Além disso, o sync passou por um hardening recente para evitar limpeza destrutiva local sob falha parcial de rede.
 
-No momento, o projeto está em estado mais consistente para colaboração + lifecycle de visitas transitórias, com preenchimento de tags mais assistido **e com a refatoração principal do legado de notas já avançada (slices 1–3 concluídos)**. O próximo passo operacional é rodar auditoria real + cleanup seletivo no Firebase do projeto.
+No momento, o projeto está em estado mais consistente para colaboração + lifecycle de visitas transitórias, com preenchimento de tags mais assistido, **com a refatoração do legado de notas concluída em código + limpeza remota executada no projeto Firebase**, e com a refatoração de naming de visitas em andamento (slices 1–3 concluídos localmente).
 
 ---
 
@@ -114,17 +114,35 @@ Estado atual:
   - não faz mais purge imediato de `orphanedVisitIds` por evidência fraca
 - `visits-view` e `dashboard-view` mostram estado mais conservador sob sync instável, em vez de empty state absoluto enganoso
 
-### 9) Status do legado de notas após slices 1–3
+### 9) Status do legado de notas após slices 1–4 + cleanup remoto
 Estado atual:
 - pull legado em `/users/{uid}/notes` removido
 - escrita legada em `/users/{uid}/notes` removida
 - script administrativo de auditoria/cleanup criado em `functions/src/scripts/legacy-user-notes-cleanup.ts`
+- limpeza remota já executada no projeto `visitamed-36570`
+- auditoria real antes do cleanup encontrou:
+  - `37` docs legados
+  - `37` com `visitId` válido
+  - `0` sem `visitId`
+  - `32` com correspondente em `/visits/{visitId}/notes/{noteId}`
+  - `5` sem correspondente
+- cleanup remoto executado com sucesso:
+  - `37` docs legados apagados de `/users/{uid}/notes`
 - fonte remota ativa para notas de visita consolidada em `/visits/{visitId}/notes/{noteId}`
 
-Próximo passo operacional:
-- executar auditoria real no projeto Firebase
-- revisar o relatório
-- executar cleanup seletivo com `--apply` somente após validação do dry-run
+### 10) Refatoração de naming de visitas (slices 1–3)
+Estado atual:
+- novas visitas não persistem mais data/mode dentro de `visit.name`
+- `createPrivateVisit('HMH')` agora persiste `HMH`
+- `createPrivateVisit()` agora persiste `Visita`
+- dedupe por usuário + data continua com sufixos `(2)`, `(3)`, ...
+- ao promover visita antiga para `group`, `ensureVisitIsGroup(...)` normaliza nomes legados como:
+  - `HMH 01-04-2026 privada` -> `HMH`
+  - `Visita 01-04-2026 privada (3)` -> `Visita`
+- `visits-view` agora mostra o modo como badge visual:
+  - `Privada`
+  - `Compartilhada`
+- `visit.name` passa a representar apenas o nome semântico da visita
 
 ---
 
@@ -145,10 +163,16 @@ Próximo passo operacional:
 - `f8f1c27` fix(sync): avoid destructive local cleanup on partial pull
 - `556a050` fix(visit): stop grouping notes by note date
 
-### Refatoração do legado de notas (slices 1–3)
+### Refatoração do legado de notas
 - `c77b629` refactor(sync): stop pulling legacy user notes
 - `82be003` refactor(sync): write visit notes to visit path
 - `c23c742` chore(sync): add legacy user notes cleanup script
+- `7d1f8f3` docs(sync): align legacy notes refactor status
+
+### Refatoração de naming de visitas
+- Slice 1 local: novas visitas deixam de persistir data/mode no `name`
+- Slice 2 local: nomes legados são normalizados ao compartilhar (`ensureVisitIsGroup`)
+- Slice 3 local: `visits-view` exibe badge de modo (`Privada` / `Compartilhada`)
 
 ### Documentação recente
 - `e1b1c94` docs(handoff): update visit note grouping behavior
@@ -515,21 +539,18 @@ Se houver dúvida operacional, confirmar no Firebase Console se o índice de `in
 
 ## Próximos ajustes / features prováveis
 
-### 1) Próximo passo operacional do legado de notas
-Status atual:
-- slices 1–3 já implementados no código
+### 1) Smoke tests manuais pós-refatoração
+Prioridade alta:
+- criar visita nova com nome custom (`HMH`) e confirmar que o card mostra:
+  - nome limpo
+  - badge `Privada`
+  - data separada
+- compartilhar visita nova e confirmar badge `Compartilhada`
+- compartilhar visita antiga com nome legado e confirmar normalização do nome
+- reproduzir o bug original de nota removida por convidado para confirmar que não ressuscita mais
+- validar edição/save em visita compartilhada após as mudanças recentes
 
-Checklist operacional recomendado:
-- rodar auditoria real (dry-run) do passivo legado em `/users/{uid}/notes`
-- revisar relatório e amostras
-- executar cleanup seletivo com `--apply`
-- monitorar logs/smoke tests após cleanup
-
-Decisão operacional mantida:
-- **não apagar todo o Firestore**
-- apagar apenas os registros legados auditados
-
-### 2) Smoke tests manuais pós-deploy
+### 2) Observação inicial do scheduler e da trigger de expiração
 Prioridade alta:
 - aceitar convite como `viewer` e `editor`
 - validar `leave visit`
@@ -605,7 +626,7 @@ Observações:
 ## Recomendação de retomada após reset
 
 1. Ler este arquivo.
-2. Considerar concluídos os slices 1–3 da refatoração do legado de notas.
-3. Rodar auditoria real dos registros remotos legados de notas antes de apagar qualquer coisa.
-4. Não fazer wipe completo do Firestore; executar cleanup seletivo somente após validação do dry-run.
-5. Em seguida, rodar smoke test manual focado em colaboração, remoção de notas compartilhadas, sync e expiração.
+2. Considerar concluída a refatoração do legado de notas em código e a limpeza remota já executada no projeto Firebase.
+3. Retomar pelos smoke tests manuais de colaboração/naming de visitas e pelo acompanhamento de sync compartilhado.
+4. Não fazer wipe completo do Firestore; o cleanup seletivo do legado de notas já foi executado com sucesso.
+5. Se a UI de naming estiver estável, priorizar próximos refinamentos funcionais menores.

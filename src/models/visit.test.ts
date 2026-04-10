@@ -3,80 +3,66 @@
  */
 
 import { describe, it, expect, vi } from 'vitest';
-import { generatePrivateVisitName, getCurrentDate, createVisit } from '@/models/visit';
+import {
+  generatePrivateVisitName,
+  getCurrentDate,
+  createVisit,
+  normalizeLegacyPrivateVisitName,
+} from '@/models/visit';
 
 describe('visit - generatePrivateVisitName', () => {
   it('deve gerar nome padrão sem prefixo', () => {
-    // Mock da data para teste determinístico
-    const mockDate = new Date('2024-03-15T10:30:00');
-    vi.useFakeTimers();
-    vi.setSystemTime(mockDate);
-
     const name = generatePrivateVisitName();
 
-    expect(name).toBe('Visita 15-03-2024 privada');
-
-    vi.useRealTimers();
+    expect(name).toBe('Visita');
   });
 
   it('deve gerar nome com prefixo personalizado', () => {
-    const mockDate = new Date('2024-03-15T10:30:00');
-    vi.useFakeTimers();
-    vi.setSystemTime(mockDate);
-
     const name = generatePrivateVisitName('UTI');
 
-    expect(name).toBe('UTI 15-03-2024 privada');
-
-    vi.useRealTimers();
+    expect(name).toBe('UTI');
   });
 
   it('deve gerar nome com prefixo contendo espaços', () => {
-    const mockDate = new Date('2024-01-05T08:00:00');
-    vi.useFakeTimers();
-    vi.setSystemTime(mockDate);
-
     const name = generatePrivateVisitName('Ala A');
 
-    expect(name).toBe('Ala A 05-01-2024 privada');
-
-    vi.useRealTimers();
+    expect(name).toBe('Ala A');
   });
 
   it('deve ignorar prefixo vazio', () => {
-    const mockDate = new Date('2024-12-25T00:00:00');
-    vi.useFakeTimers();
-    vi.setSystemTime(mockDate);
-
     const name = generatePrivateVisitName('');
 
-    expect(name).toBe('Visita 25-12-2024 privada');
-
-    vi.useRealTimers();
+    expect(name).toBe('Visita');
   });
 
   it('deve ignorar prefixo com apenas espaços', () => {
-    const mockDate = new Date('2024-07-01T12:00:00');
-    vi.useFakeTimers();
-    vi.setSystemTime(mockDate);
-
     const name = generatePrivateVisitName('   ');
 
-    expect(name).toBe('Visita 01-07-2024 privada');
-
-    vi.useRealTimers();
+    expect(name).toBe('Visita');
   });
 
   it('deve fazer trim no prefixo', () => {
-    const mockDate = new Date('2024-06-10T14:00:00');
-    vi.useFakeTimers();
-    vi.setSystemTime(mockDate);
-
     const name = generatePrivateVisitName('  UTI  ');
 
-    expect(name).toBe('UTI 10-06-2024 privada');
+    expect(name).toBe('UTI');
+  });
+});
 
-    vi.useRealTimers();
+describe('visit - normalizeLegacyPrivateVisitName', () => {
+  it('normaliza formato legado simples', () => {
+    expect(normalizeLegacyPrivateVisitName('HMH 01-04-2026 privada')).toBe('HMH');
+  });
+
+  it('normaliza formato legado com sufixo incremental', () => {
+    expect(normalizeLegacyPrivateVisitName('Plantão manhã 01-04-2026 privada (3)')).toBe('Plantão manhã');
+  });
+
+  it('mantém nome arbitrário fora do padrão legado', () => {
+    expect(normalizeLegacyPrivateVisitName('Caso privada enfermaria')).toBe('Caso privada enfermaria');
+  });
+
+  it('mantém nome quando formato de data não bate padrão legado', () => {
+    expect(normalizeLegacyPrivateVisitName('Visita 2026-04-01 privada')).toBe('Visita 2026-04-01 privada');
   });
 });
 

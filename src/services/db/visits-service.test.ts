@@ -573,11 +573,11 @@ describe('ensureVisitIsGroup', () => {
     mockGetAuthStateFn.mockReturnValue({ user: { uid: mockUserId } });
   });
 
-  it('converte visita private para group e enfileira visit:update', async () => {
+  it('converte visita private para group, normaliza nome legado e enfileira visit:update', async () => {
     mockDb.visits.get.mockResolvedValue({
       id: mockVisitId,
       userId: mockUserId,
-      name: 'Visita privada',
+      name: 'Visita 01-04-2026 privada',
       date: '2026-04-05',
       mode: 'private',
       createdAt: new Date(),
@@ -596,14 +596,73 @@ describe('ensureVisitIsGroup', () => {
     const result = await ensureVisitIsGroup(mockVisitId);
 
     expect(result.mode).toBe('group');
+    expect(result.name).toBe('Visita');
     expect(result.updatedAt).toBeInstanceOf(Date);
-    expect(mockDb.visits.put).toHaveBeenCalledWith(expect.objectContaining({ mode: 'group' }));
+    expect(mockDb.visits.put).toHaveBeenCalledWith(expect.objectContaining({ mode: 'group', name: 'Visita' }));
     expect(mockDb.syncQueue.add).toHaveBeenCalledWith(
       expect.objectContaining({
         operation: 'update',
         entityType: 'visit',
         entityId: mockVisitId,
       })
+    );
+  });
+
+  it('normaliza formato legado com sufixo incremental ao promover private para group', async () => {
+    mockDb.visits.get.mockResolvedValue({
+      id: mockVisitId,
+      userId: mockUserId,
+      name: 'Plantão manhã 01-04-2026 privada (3)',
+      date: '2026-04-05',
+      mode: 'private',
+      createdAt: new Date(),
+      expiresAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+    } as Visit);
+
+    mockDb.visitMembers.get.mockResolvedValue({
+      id: `${mockVisitId}:${mockUserId}`,
+      visitId: mockVisitId,
+      userId: mockUserId,
+      role: 'owner',
+      status: 'active',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    } as VisitMember);
+
+    const result = await ensureVisitIsGroup(mockVisitId);
+
+    expect(result.name).toBe('Plantão manhã');
+    expect(mockDb.visits.put).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'Plantão manhã', mode: 'group' })
+    );
+  });
+
+  it('mantém nome fora do padrão legado ao promover private para group', async () => {
+    mockDb.visits.get.mockResolvedValue({
+      id: mockVisitId,
+      userId: mockUserId,
+      name: 'Caso privada enfermaria',
+      date: '2026-04-05',
+      mode: 'private',
+      createdAt: new Date(),
+      expiresAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+    } as Visit);
+
+    mockDb.visitMembers.get.mockResolvedValue({
+      id: `${mockVisitId}:${mockUserId}`,
+      visitId: mockVisitId,
+      userId: mockUserId,
+      role: 'owner',
+      status: 'active',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    } as VisitMember);
+
+    const result = await ensureVisitIsGroup(mockVisitId);
+
+    expect(result.name).toBe('Caso privada enfermaria');
+    expect(mockDb.visits.put).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'Caso privada enfermaria', mode: 'group' })
     );
   });
 
@@ -855,11 +914,6 @@ const { createPrivateVisit } = await import('./visits-service');
 describe('createPrivateVisit - nome opcional e dedupe', () => {
   const mockUserId = 'user-test';
   const currentDate = new Date().toISOString().split('T')[0];
-  const now = new Date();
-  const day = String(now.getDate()).padStart(2, '0');
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const year = now.getFullYear();
-  const currentDateLabel = `${day}-${month}-${String(year)}`;
 
   const mockDbVisitsWhere = {
     equals: vi.fn().mockReturnValue({
@@ -886,7 +940,7 @@ describe('createPrivateVisit - nome opcional e dedupe', () => {
     mockDb.visits.where.mockReturnValue(mockDbVisitsWhere);
   });
 
-  it('deve criar visita sem prefixo (comportamento atual)', async () => {
+  it('deve criar visita sem prefixo com nome base sem metadata', async () => {
     mockGetAuthState.mockReturnValue({ user: { uid: mockUserId } });
     mockDb.visits.where.mockReturnValue({
       equals: vi.fn().mockReturnValue({
@@ -908,7 +962,7 @@ describe('createPrivateVisit - nome opcional e dedupe', () => {
     expect(result.userId).toBe(mockUserId);
     expect(result.date).toBe(currentDate);
     expect(result.mode).toBe('private');
-    expect(result.name).toContain('privada');
+    expect(result.name).toBe('Visita');
 
     // Verificar sync queue: visit + visit-member
     expect(addedSyncItems.length).toBe(2);
@@ -924,7 +978,7 @@ describe('createPrivateVisit - nome opcional e dedupe', () => {
     expect(hasMemberItem).toBe(true);
   });
 
-  it('deve criar visita com prefixo personalizado', async () => {
+  it('deve criar visita com prefixo personalizado sem metadata', async () => {
     mockGetAuthState.mockReturnValue({ user: { uid: mockUserId } });
     mockDb.visits.where.mockReturnValue({
       equals: vi.fn().mockReturnValue({
@@ -938,8 +992,7 @@ describe('createPrivateVisit - nome opcional e dedupe', () => {
     const result = await createPrivateVisit('Plantão manhã');
 
     expect(result).toBeDefined();
-    expect(result.name).toContain('Plantão manhã');
-    expect(result.name).toContain('privada');
+    expect(result.name).toBe('Plantão manhã');
   });
 
   it('deve adicionar sufixo (2) quando nome já existe no mesmo dia', async () => {
@@ -948,7 +1001,7 @@ describe('createPrivateVisit - nome opcional e dedupe', () => {
     const existingVisit: Visit = {
       id: 'existing-visit',
       userId: mockUserId,
-      name: `Plantão manhã ${currentDateLabel} privada`,
+      name: 'Plantão manhã',
       date: currentDate,
       mode: 'private',
       createdAt: new Date(),
@@ -966,8 +1019,7 @@ describe('createPrivateVisit - nome opcional e dedupe', () => {
 
     const result = await createPrivateVisit('Plantão manhã');
 
-    expect(result.name).toContain('(2)');
-    expect(result.name).not.toBe(`Plantão manhã ${currentDateLabel} privada`);
+    expect(result.name).toBe('Plantão manhã (2)');
   });
 
   it('deve adicionar sufixo (3) quando nomes (2) também existem', async () => {
@@ -977,7 +1029,7 @@ describe('createPrivateVisit - nome opcional e dedupe', () => {
       {
         id: 'visit-1',
         userId: mockUserId,
-        name: `Plantão manhã ${currentDateLabel} privada`,
+        name: 'Plantão manhã',
         date: currentDate,
         mode: 'private',
         createdAt: new Date(),
@@ -986,7 +1038,7 @@ describe('createPrivateVisit - nome opcional e dedupe', () => {
       {
         id: 'visit-2',
         userId: mockUserId,
-        name: `Plantão manhã ${currentDateLabel} privada (2)`,
+        name: 'Plantão manhã (2)',
         date: currentDate,
         mode: 'private',
         createdAt: new Date(),
@@ -1005,6 +1057,6 @@ describe('createPrivateVisit - nome opcional e dedupe', () => {
 
     const result = await createPrivateVisit('Plantão manhã');
 
-    expect(result.name).toContain('(3)');
+    expect(result.name).toBe('Plantão manhã (3)');
   });
 });

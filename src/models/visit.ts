@@ -38,24 +38,21 @@ export const VISIT_CONSTANTS = {
 
   /** Dias até expiração padrão */
   EXPIRATION_DAYS: 14,
+
+  /** Padrão legado de nome privado automático (com data + "privada") */
+  LEGACY_PRIVATE_NAME_REGEX:
+    /^(?<base>.+?)\s+(?<date>(0[1-9]|[12]\d|3[01])-(0[1-9]|1[0-2])-\d{4})\s+privada(?:\s+\((?<duplicate>[2-9]\d*)\))?$/u,
 } as const;
 
 /**
- * Gera nome padrão para visita privada
- * Formato: "<prefixo> <dd-mm-aaaa> privada" ou "Visita dd-mm-aaaa privada"
+ * Gera nome base para novas visitas (sem metadata de data/mode)
  */
 export function generatePrivateVisitName(prefix?: string): string {
-  const now = new Date();
-  const day = String(now.getDate()).padStart(2, '0');
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const year = now.getFullYear();
-  const dateStr = `${String(day).padStart(2, '0')}-${String(month).padStart(2, '0')}-${String(year)}`;
-
   if (prefix?.trim()) {
-    return `${prefix.trim()} ${dateStr} privada`;
+    return prefix.trim();
   }
 
-  return `Visita ${dateStr} privada`;
+  return 'Visita';
 }
 
 /**
@@ -63,6 +60,24 @@ export function generatePrivateVisitName(prefix?: string): string {
  */
 export function getCurrentDate(): string {
   return new Date().toISOString().split('T')[0] ?? '';
+}
+
+/**
+ * Normaliza nomes privados legados gerados automaticamente pelo app antigo.
+ * Ex.: "HMH 01-04-2026 privada (2)" -> "HMH"
+ */
+export function normalizeLegacyPrivateVisitName(name: string): string {
+  const trimmedName = name.trim();
+  const match = trimmedName.match(VISIT_CONSTANTS.LEGACY_PRIVATE_NAME_REGEX);
+
+  const legacyBaseName = match?.groups?.['base'];
+
+  if (!legacyBaseName) {
+    return name;
+  }
+
+  const baseName = legacyBaseName.trim();
+  return baseName.length > 0 ? baseName : name;
 }
 
 /**
