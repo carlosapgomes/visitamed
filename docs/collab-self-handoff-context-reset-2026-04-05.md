@@ -95,6 +95,7 @@ Estado atual:
   - top tags
   - filtro por prefixo com base no fragmento após a última vírgula
   - chips clicáveis para adicionar a sugestão
+- ao aplicar uma sugestão, o foco retorna ao input de tags para evitar a impressão de que a próxima sugestão foi selecionada
 - as estatísticas locais são mantidas automaticamente por rebuild best-effort após mutações locais, sync remoto, realtime, limpeza por expiração e mudanças de acesso/visita
 
 ### 7) Listagem da visita sem separação por data da nota
@@ -169,6 +170,7 @@ Estado atual:
 - `c884357` feat(expiration): add visit lifecycle and cleanup flows
 
 ### Sugestões de tags
+- `36cff14` fix(tags): return focus to tag input after suggestion
 - `6e2241a` feat(tags): keep local tag suggestions in sync
 - `eab8a46` feat(tags): add local tag suggestions to note form
 - `c2b0e54` feat(tags): add local user tag suggestion stats
@@ -370,6 +372,7 @@ Resumo:
   - realtime da visita ativa
 - falha no rebuild não quebra UI nem sync
 - `new-note-view` pode manter rebuild ao abrir como fallback seguro
+- ajuste posterior de UX garante que, ao clicar numa sugestão, o foco volte para o input de tags
 
 ### K) Listagem da visita — notas deixam de ser agrupadas por data
 Arquivos principais:
@@ -534,6 +537,7 @@ Se houver dúvida operacional, confirmar no Firebase Console se o índice de `in
 - `src/views/new-note-tag-suggestions.ts`
 - `src/views/new-note-tag-suggestions.test.ts`
 - `src/views/new-note-view.ts`
+- `src/views/new-note-view.test.ts`
 - `src/services/db/notes-service.ts`
 - `src/services/db/visits-service.ts`
 - `src/services/sync/sync-service.ts`
