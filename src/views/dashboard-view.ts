@@ -335,6 +335,72 @@ export class DashboardView extends LitElement {
     return Boolean(this.currentVisit && this.member?.role === 'owner' && this.accessState === 'active');
   }
 
+  private canExportWholeVisitMessage(): boolean {
+    return this.accessState === 'active' && this.notes.length > 0;
+  }
+
+  private getVisitModeLabel(): string {
+    return this.currentVisit?.mode === 'group' ? 'Compartilhada' : 'Privada';
+  }
+
+  private getVisitModeBadgeClass(): string {
+    return this.currentVisit?.mode === 'group' ? 'text-bg-primary' : 'text-bg-secondary';
+  }
+
+  private formatDateForDisplay(date: string): string {
+    const match = date.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!match) return date;
+
+    const [, year, month, day] = match;
+    return `${day}-${month}-${year}`;
+  }
+
+  private buildWholeVisitExportScope(): ExportScope | null {
+    if (!this.canExportWholeVisitMessage()) {
+      return null;
+    }
+
+    const groupedTags = groupNotesByTag(this.notes);
+
+    if (groupedTags.length === 0) {
+      return null;
+    }
+
+    return {
+      type: 'date',
+      date: this.currentVisit?.date ?? '',
+      tags: groupedTags.map((group) => ({
+        tag: group.tag,
+        notes: group.notes,
+      })),
+    };
+  }
+
+  private handleShareWholeVisitMessage = async (): Promise<void> => {
+    const scope = this.buildWholeVisitExportScope();
+    if (!scope) {
+      this.showTemporaryToast('Sem notas para exportar');
+      return;
+    }
+
+    const message = generateMessage(scope);
+    const canShare = 'share' in navigator && typeof navigator.share === 'function';
+
+    if (canShare) {
+      try {
+        await navigator.share({ text: message });
+        return;
+      } catch {
+        // fallback para copiar
+      }
+    }
+
+    const success = await copyToClipboard(message);
+    if (success) {
+      this.showTemporaryToast('Mensagem copiada');
+    }
+  };
+
   private handleInvitePeopleClick = (): void => {
     this.inviteRole = 'editor';
     this.inviteLink = '';
@@ -649,6 +715,37 @@ export class DashboardView extends LitElement {
       <sync-status-bar></sync-status-bar>
 
       <main class="container-fluid wf-page-container wf-with-header-sync wf-sheet-safe pb-4">
+        ${this.currentVisit
+          ? html`
+              <div class="card border-0 shadow-sm mb-3">
+                <div class="card-body d-flex flex-column gap-3">
+                  <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+                    <div>
+                      <div class="d-flex align-items-center gap-2 flex-wrap">
+                        <h2 class="h5 mb-0">${this.currentVisit.name}</h2>
+                        <span class="badge ${this.getVisitModeBadgeClass()}">${this.getVisitModeLabel()}</span>
+                      </div>
+                      <div class="small text-secondary mt-1">${this.formatDateForDisplay(this.currentVisit.date)}</div>
+                    </div>
+
+                    <button
+                      type="button"
+                      class="btn btn-primary"
+                      ?disabled=${!this.canExportWholeVisitMessage()}
+                      @click=${this.handleShareWholeVisitMessage}
+                    >
+                      Gerar mensagem da visita
+                    </button>
+                  </div>
+
+                  ${!this.canExportWholeVisitMessage()
+                    ? html`<div class="small text-secondary">Adicione notas para gerar a mensagem da visita.</div>`
+                    : ''}
+                </div>
+              </div>
+            `
+          : ''}
+
         ${this.canInvitePeople() || this.canDeletePrivateVisit() || this.canDeleteGroupVisitForAll() || this.canLeaveGroupVisit()
           ? html`
               <div class="mb-3 d-flex justify-content-end gap-2 flex-wrap">
