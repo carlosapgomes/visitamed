@@ -234,6 +234,7 @@ export class DashboardView extends LitElement {
     return {
       type: 'date',
       date: this.currentVisit?.date ?? '',
+      title: this.currentVisit?.name ?? 'Pendências',
       tags: groupedTags.map((group) => ({
         tag: group.tag,
         notes: group.notes,

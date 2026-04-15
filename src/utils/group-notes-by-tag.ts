@@ -5,7 +5,8 @@
  * Regras:
  * - agrupar somente por tag (sem particionar por data)
  * - nota com múltiplas tags aparece em múltiplos grupos (fan-out)
- * - ordenação: tag asc, notas por leito asc
+ * - ordenação de grupos: quantidade de notas desc, depois tag asc
+ * - ordenação interna: notas por leito asc
  * - evitar duplicata da mesma nota no mesmo grupo
  */
 
@@ -50,7 +51,14 @@ export function groupNotesByTag(notes: Note[]): GroupedNotesByTag[] {
   }
 
   return Array.from(byTag.entries())
-    .sort((a, b) => a[0].localeCompare(b[0]))
+    .sort((a, b) => {
+      const byCount = b[1].length - a[1].length;
+      if (byCount !== 0) {
+        return byCount;
+      }
+
+      return a[0].localeCompare(b[0]);
+    })
     .map(([tag, tagNotes]) => ({
       tag,
       notes: [...tagNotes].sort((a, b) => a.bed.localeCompare(b.bed)),

@@ -94,7 +94,7 @@ describe('generateMessage', () => {
   });
 
   describe('escopo date', () => {
-    it('gera mensagem com título *Pendências*', () => {
+    it('gera mensagem com título *Pendências* por padrão', () => {
       const scope: ExportScope = {
         type: 'date',
         date: '2024-03-25',
@@ -109,6 +109,25 @@ describe('generateMessage', () => {
       const result = generateMessage(scope);
 
       expect(result).toContain('*Pendências*');
+    });
+
+    it('usa título customizado quando informado no escopo date', () => {
+      const scope: ExportScope = {
+        type: 'date',
+        date: '2024-03-25',
+        title: 'Visita Clínica',
+        tags: [
+          {
+            tag: 'UTI',
+            notes: [createTestNote({ bed: 'U02', note: 'discutir antibiótico' })],
+          },
+        ],
+      };
+
+      const result = generateMessage(scope);
+
+      expect(result).toContain('*Visita Clínica*');
+      expect(result).not.toContain('*Pendências*');
     });
 
     it('renderiza múltiplas tags', () => {

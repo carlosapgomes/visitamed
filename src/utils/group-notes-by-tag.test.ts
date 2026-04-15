@@ -54,7 +54,7 @@ describe('groupNotesByTag', () => {
     expect(result[1].notes[0].id).toBe('1');
   });
 
-  it('mantém ordenação estável: tags asc e notas por leito asc', () => {
+  it('ordena grupos por quantidade de notas desc e desempata por tag asc', () => {
     const notes: Note[] = [
       createTestNote({ id: '1', tags: ['UTI'], bed: 'i04b' }),
       createTestNote({ id: '2', tags: ['ENFERMARIA'], bed: 'i04d' }),
@@ -63,7 +63,7 @@ describe('groupNotesByTag', () => {
 
     const result = groupNotesByTag(notes);
 
-    expect(result.map((group) => group.tag)).toEqual(['ENFERMARIA', 'UTI']);
-    expect(result[1].notes.map((note) => note.bed)).toEqual(['i04a', 'i04b']);
+    expect(result.map((group) => group.tag)).toEqual(['UTI', 'ENFERMARIA']);
+    expect(result[0].notes.map((note) => note.bed)).toEqual(['i04a', 'i04b']);
   });
 });

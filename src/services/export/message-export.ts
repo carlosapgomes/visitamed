@@ -16,6 +16,8 @@ export interface DateScope {
   type: 'date';
   date: string;
   tags: TagGroupData[];
+  /** Título opcional do bloco (fallback: Pendências) */
+  title?: string;
 }
 
 /** Escopo de exportação por tag */
@@ -44,7 +46,7 @@ export const DEFAULT_EXPORT_OPTIONS: ExportOptions = {
  * Gera mensagem formatada a partir de um escopo
  *
  * Formato para data:
- * *Pendências*
+ * *Pendências* (ou título customizado)
  *
  * *Tag*
  * - LEITO | nota
@@ -68,8 +70,10 @@ export function generateMessage(scope: ExportScope): string {
  */
 function generateDateMessage(scope: DateScope): string {
   const lines: string[] = [];
+  const normalizedTitle = scope.title?.trim();
+  const title = normalizedTitle && normalizedTitle.length > 0 ? normalizedTitle : 'Pendências';
 
-  lines.push('*Pendências*');
+  lines.push(`*${title}*`);
   lines.push('');
 
   for (const tagGroup of scope.tags) {
