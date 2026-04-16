@@ -16,9 +16,16 @@ import {
   leaveVisit,
   deleteGroupVisitAsOwner,
   ensureVisitIsGroup,
+  duplicateVisitAsPrivate,
 } from '@/services/db/visits-service';
 import { createVisitInviteForVisit, buildVisitInviteLink } from '@/services/db/visit-invites-service';
-import { canEditNote, canDeleteNote, getVisitAccessState, type VisitAccessState } from '@/services/auth/visit-permissions';
+import {
+  canEditNote,
+  canDeleteNote,
+  canDuplicateVisit,
+  getVisitAccessState,
+  type VisitAccessState,
+} from '@/services/auth/visit-permissions';
 import { getDashboardGroupActions } from '@/services/auth/dashboard-actions-policy';
 import { groupNotesByTag } from '@/utils/group-notes-by-tag';
 import { getSyncStatus, subscribeToSync, type SyncStatus } from '@/services/sync/sync-service';
@@ -70,6 +77,7 @@ export class DashboardView extends LitElement {
   @state() private inviteRole: InviteRole = 'editor';
   @state() private inviteLink = '';
   @state() private isGeneratingInvite = false;
+  @state() private isDuplicatingVisit = false;
   @state() private syncStatus: SyncStatus = getSyncStatus();
   @state() private lastSyncErrorAt: Date | null = null;
 
@@ -354,6 +362,14 @@ export class DashboardView extends LitElement {
     return Boolean(this.currentVisit && this.member?.role === 'owner' && this.accessState === 'active');
   }
 
+  private canCreatePrivateCopy(): boolean {
+    if (!this.currentVisit || !this.member) {
+      return false;
+    }
+
+    return this.currentVisit.mode === 'group' && canDuplicateVisit(this.member);
+  }
+
   private canExportWholeVisitMessage(): boolean {
     return this.accessState === 'active' && this.notes.length > 0;
   }
@@ -405,6 +421,25 @@ export class DashboardView extends LitElement {
     };
     this.selectedTitle = 'Visita inteira';
     this.isActionSheetOpen = true;
+  };
+
+  private handleDuplicateVisitClick = async (): Promise<void> => {
+    if (!this.visitId || this.isDuplicatingVisit || !this.canCreatePrivateCopy()) {
+      return;
+    }
+
+    this.isDuplicatingVisit = true;
+
+    try {
+      const duplicatedVisit = await duplicateVisitAsPrivate(this.visitId);
+      this.showTemporaryToast('Cópia privada criada');
+      navigate(`/visita/${duplicatedVisit.id}`);
+    } catch (error) {
+      console.error('Erro ao criar cópia privada da visita:', error);
+      this.showTemporaryToast('Erro ao criar cópia privada');
+    } finally {
+      this.isDuplicatingVisit = false;
+    }
   };
 
   private handleInvitePeopleClick = (): void => {
@@ -752,9 +787,21 @@ export class DashboardView extends LitElement {
             `
           : ''}
 
-        ${this.canInvitePeople() || this.canDeletePrivateVisit() || this.canDeleteGroupVisitForAll() || this.canLeaveGroupVisit()
+        ${this.canCreatePrivateCopy() || this.canInvitePeople() || this.canDeletePrivateVisit() || this.canDeleteGroupVisitForAll() || this.canLeaveGroupVisit()
           ? html`
               <div class="mb-3 d-flex justify-content-end gap-2 flex-wrap">
+                ${this.canCreatePrivateCopy()
+                  ? html`
+                      <button
+                        type="button"
+                        class="btn btn-outline-secondary"
+                        ?disabled=${this.isDuplicatingVisit}
+                        @click=${this.handleDuplicateVisitClick}
+                      >
+                        ${this.isDuplicatingVisit ? 'Criando cópia...' : 'Criar cópia privada'}
+                      </button>
+                    `
+                  : ''}
                 ${this.canInvitePeople()
                   ? html`
                       <button type="button" class="btn btn-outline-primary" @click=${this.handleInvitePeopleClick}>
