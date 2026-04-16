@@ -124,8 +124,10 @@ export class SyncStatusBar extends LitElement {
   override render() {
     // Don't render if no user is logged in (handled by parent)
     return html`
-      <div class="wf-sync-status-bar py-2 px-3 border-bottom bg-body">
-        ${this.renderStatusContent()}
+      <div class="wf-sync-status-bar border-bottom bg-body">
+        <div class="wf-sync-status-inner">
+          ${this.renderStatusContent()}
+        </div>
       </div>
     `;
   }

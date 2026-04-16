@@ -22,6 +22,7 @@
   --wf-max-content: 860px;
   --wf-header-bg: #e6efff;
   --wf-header-border: #c8d9ff;
+  --wf-sync-status-height: 44px;
 }
 
 [data-theme='dark'] {
@@ -66,11 +67,33 @@ body {
 }
 
 .wf-with-header {
-  padding-top: calc(var(--header-height) + var(--safe-area-inset-top) + var(--space-4));
+  padding-top: calc(var(--header-height) + var(--safe-area-inset-top) + var(--space-2));
 }
 
 .wf-with-header-sync {
-  padding-top: calc(var(--header-height) + var(--safe-area-inset-top) + var(--space-4) + 44px);
+  padding-top: calc(
+    var(--header-height) +
+    var(--safe-area-inset-top) +
+    var(--wf-sync-status-height) +
+    var(--space-2)
+  );
+}
+
+.wf-sync-status-bar {
+  position: fixed;
+  top: calc(var(--header-height) + var(--safe-area-inset-top));
+  left: 0;
+  right: 0;
+  z-index: 1020;
+}
+
+.wf-sync-status-inner {
+  min-height: var(--wf-sync-status-height);
+  max-width: var(--wf-max-content);
+  margin: 0 auto;
+  padding: var(--space-2) var(--space-3);
+  display: flex;
+  align-items: center;
 }
 
 .wf-header-slot {
