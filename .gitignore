@@ -31,8 +31,12 @@ npm-debug.log*
 # TypeScript
 *.tsbuildinfo
 
-# PWA
+# PWA / Firebase local
 dev-dist/
 prompts/
 .firebase/
+fb-svc-acct.json
+
+# Firebase Functions build output
+functions/lib/
 
