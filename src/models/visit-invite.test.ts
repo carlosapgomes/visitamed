@@ -44,6 +44,16 @@ describe('visit-invite - createVisitInvite', () => {
     expect(diffHours).toBeCloseTo(48, 0);
   });
 
+  it('cria convite com papel admin (InviteRole inclui admin)', () => {
+    const invite = createVisitInvite({
+      visitId: 'v1',
+      createdByUserId: 'u1',
+      role: 'admin',
+    });
+
+    expect(invite.role).toBe('admin');
+  });
+
   it('gera token e id aleatórios', () => {
     const invite1 = createVisitInvite({ visitId: 'v1', createdByUserId: 'u1', role: 'editor' });
     const invite2 = createVisitInvite({ visitId: 'v1', createdByUserId: 'u1', role: 'editor' });

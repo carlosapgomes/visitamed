@@ -19,6 +19,7 @@ O `acceptInviteEndpointV2` passa a reativar memberships removidos quando o convi
 - **R3 — Idempotência preservada**: membership `active` ⇒ resposta `already-member` atual, sem mudanças no doc.
 - **R4 — displayName**: em qualquer aceite (novo ou reativação), grava `displayName` = claim `name` do token, trim, vazio→ausente, máx. 100 chars; ausência do claim ⇒ campo não é gravado (nunca string vazia).
 - **R5 — Coerência de caminho**: o endpoint passa a usar o `visitId` do **caminho** do doc de convite; se o campo `visitId` gravado divergir do caminho, o convite é tratado como não encontrado (não confiar no campo).
+- **R6 — Convite admin aceitável (P1 transferido do slice-002)**: o tipo `InviteRole` local de `functions/src/index.ts` (~linha 24) e `parseInviteRole` (~linhas 172-181) passam a aceitar `'admin'`; convite com `role:'admin'` criado sob as rules do slice-002 é aceito pelo endpoint (hoje retornaria `invalid-invite-role`). Adicionar linha de matriz no runbook R2: aceite de convite admin → membership `admin`.
 
 ## Matriz requisito -> arquivo -> teste/check
 
@@ -29,6 +30,7 @@ O `acceptInviteEndpointV2` passa a reativar memberships removidos quando o convi
 | R3 | `functions/src/index.ts` | Emulador: membro ativo → `already-member`, doc inalterado |
 | R4 | `functions/src/index.ts` | Emulador: token com `name:" Ana Silva "` → doc grava `"Ana Silva"`; token sem `name` → doc sem `displayName` |
 | R5 | `functions/src/index.ts` | Emulador: convite com campo `visitId` divergente do caminho → tratado como não encontrado |
+| R6 | `functions/src/index.ts` | Emulador: aceite de convite `role:'admin'` → membership criado/reativado com papel `admin` (sem `invalid-invite-role`) |
 
 Execução: runbook R2 (`slices/emulator-runbook.md`) — seed de docs com timestamps explícitos via Admin SDK contra o Firestore emulator; usuários/tokens via Auth emulator.
 
@@ -57,19 +59,19 @@ Escalar se: a comparação `createdAt` exigir mudar o formato/gravação de invi
 
 ### GREEN
 
-- Mesmos cenários do emulador (R1–R5) com resultados da matriz, via runbook R2.
+- Mesmos cenários do emulador (R1–R6) com resultados da matriz, via runbook R2.
 - `cd functions && npm run build` — exit 0.
 - `npx tsc -p tsconfig.json --noEmit` na raiz — exit 0 (campo novo no modelo).
 
 ## Verificação do slice
 
-- Matriz do runbook R2 registrada (R1–R5)
+- Matriz do runbook R2 registrada (R1–R6)
 - `npx vitest run src/models src/views/invite-accept-view.test.ts` — exit 0 (client sem regressão; view ainda não usa o campo)
 - `git diff functions/src/index.ts`: apenas `acceptInviteEndpointV2` (e tipos auxiliares) alterados
 
 ## Critérios de aceitação
 
-- [ ] R1–R5 demonstrados (runbook R2)
+- [ ] R1–R6 demonstrados (runbook R2)
 - [ ] Códigos de resposta existentes (`already-member`, `access-revoked`, expirado, revogado) preservados
 - [ ] Apenas os 2 arquivos do blast radius
 

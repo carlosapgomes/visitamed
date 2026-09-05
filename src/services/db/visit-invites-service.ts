@@ -4,7 +4,7 @@
  * S11E: token hash SHA-256 em repouso, sem token bruto
  */
 
-import { doc, collection, setDoc, getDoc, getDocs, updateDoc, Timestamp, type Firestore } from 'firebase/firestore';
+import { doc, collection, setDoc, getDoc, getDocs, updateDoc, Timestamp, serverTimestamp, type Firestore } from 'firebase/firestore';
 
 /**
  * Gera hash SHA-256 hex de uma string (Web Crypto API)
@@ -91,7 +91,9 @@ function serializeVisitInviteForFirestore(invite: VisitInvite, tokenHash: string
     tokenHash, // S11E: token hash em repouso
     role: invite.role,
     expiresAt: dateToFirestoreTimestamp(invite.expiresAt),
-    createdAt: dateToFirestoreTimestamp(invite.createdAt),
+    // createdAt é ancorado no servidor: as rules exigem createdAt == request.time
+    // no create de invites (base confiável para a re-entrada via convite-novo).
+    createdAt: serverTimestamp(),
     updatedAt: dateToFirestoreTimestamp(invite.updatedAt),
     revokedAt: invite.revokedAt ? dateToFirestoreTimestamp(invite.revokedAt) : null,
   };
@@ -154,7 +156,7 @@ async function validateCanManageInvites(visitId: string): Promise<void> {
   }
 
   if (!canManageInvites(currentMember)) {
-    throw new Error('Apenas o owner pode criar ou revogar convites.');
+    throw new Error('Apenas o owner ou um admin podem criar ou revogar convites.');
   }
 }
 

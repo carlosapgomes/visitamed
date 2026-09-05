@@ -11,10 +11,10 @@
 
 ## 3. Slice 2 — Convites com papel admin (slices/slice-002-invite-admin-role.md)
 
-- [ ] 3.1 RED: testes do papel `admin` em `InviteRole` (`src/models/visit-invite.test.ts`) e aceitação de admin na validação de gerência de convites (`src/services/db/visit-invites-service.test.ts`); rodar focado e falhar pelo motivo esperado
-- [ ] 3.2 GREEN: adicionar `'admin'` a `InviteRole` em `src/models/visit-invite.ts` e ajustar `src/services/db/visit-invites-service.ts` (validação usa permissões do slice 1); mesmo comando focado passa
-- [ ] 3.3 Rules de invites **separadas por operação** (nunca `write` amplo): `read` = `isOwner || isAdmin` (helper `isAdmin` novo); `create` valida `role in ['admin','editor','viewer']`, `createdByUserId == uid`, `visitId == visitId` do caminho e `createdAt == request.time` (ancoragem server-side para a re-entrada); `update` mantém `role` imutável; verificação pela matriz R1 do runbook (`scripts/rules-smoke.mjs`)
-- [ ] 3.4 Verificação do slice: `npx vitest run src/models src/services/db/visit-invites-service.test.ts` + lint dos arquivos alterados
+- [x] 3.1 RED: testes do papel `admin` em `InviteRole` (`src/models/visit-invite.test.ts`) e aceitação de admin na validação de gerência de convites (`src/services/db/visit-invites-service.test.ts`); rodar focado e falhar pelo motivo esperado
+- [x] 3.2 GREEN: adicionar `'admin'` a `InviteRole` em `src/models/visit-invite.ts` e ajustar `src/services/db/visit-invites-service.ts` (validação usa permissões do slice 1); mesmo comando focado passa
+- [x] 3.3 Rules de invites **separadas por operação** (nunca `write` amplo): `read` = `isOwner || isAdmin` (helper `isAdmin` novo); `create` valida `role in ['admin','editor','viewer']`, `createdByUserId == uid`, `visitId == visitId` do caminho e `createdAt == request.time` (ancoragem server-side para a re-entrada); `update` mantém `role` imutável; verificação pela matriz R1 do runbook (`scripts/rules-smoke.mjs`)
+- [x] 3.4 Verificação do slice: `npx vitest run src/models src/services/db/visit-invites-service.test.ts` + lint dos arquivos alterados
 
 ## 4. Slice 3 — Rules de members para admins (slices/slice-003-rules-member-administration.md)
 

@@ -26,6 +26,15 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/visits/$(visitId)/members/$(uid)).data.role == 'owner';
     }
 
+    // Verifica se usuário é admin ativo da visita (owner ou papel admin)
+    function isAdmin(visitId, uid) {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/visits/$(visitId)/members/$(uid))
+        && get(/databases/$(database)/documents/visits/$(visitId)/members/$(uid)).data.status == 'active'
+        && (get(/databases/$(database)/documents/visits/$(visitId)/members/$(uid)).data.role == 'owner'
+            || get(/databases/$(database)/documents/visits/$(visitId)/members/$(uid)).data.role == 'admin');
+    }
+
     // Pode editar visita (owner ou editor ativo)
     function canEditVisit(visitId, uid) {
       return isSignedIn()
@@ -92,8 +101,28 @@ service cloud.firestore {
 
       // Subcoleção: invites
       match /invites/{inviteId} {
-        // Read/write: apenas owner
-        allow read, write: if isOwner(visitId, request.auth.uid);
+        // Read: owner ou admin ativo
+        allow read: if isOwner(visitId, request.auth.uid)
+          || isAdmin(visitId, request.auth.uid);
+
+        // Create: owner/admin ativos com validação completa.
+        // Regras separadas por operação (nunca `write` amplo): OR anularia as validações.
+        allow create: if (isOwner(visitId, request.auth.uid) || isAdmin(visitId, request.auth.uid))
+          && request.resource.data.role in ['admin', 'editor', 'viewer']
+          && request.resource.data.createdByUserId == request.auth.uid
+          && request.resource.data.visitId == visitId
+          && request.resource.data.createdAt == request.time;
+
+        // Update (revogação): owner/admin. Apenas revokedAt/updatedAt podem mudar
+        // (protege tokenHash/expiresAt contra alteração indevida); papel imutável,
+        // identidade preservada e tipos dos campos de revogação validados.
+        allow update: if (isOwner(visitId, request.auth.uid) || isAdmin(visitId, request.auth.uid))
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['revokedAt', 'updatedAt'])
+          && request.resource.data.role == resource.data.role
+          && request.resource.data.visitId == resource.data.visitId
+          && request.resource.data.createdByUserId == resource.data.createdByUserId
+          && (request.resource.data.revokedAt == null || request.resource.data.revokedAt is timestamp)
+          && request.resource.data.updatedAt is timestamp;
       }
     }
 

@@ -45,6 +45,7 @@ vi.mock('firebase/firestore', () => ({
     })
   ),
   updateDoc: vi.fn(() => Promise.resolve()),
+  serverTimestamp: vi.fn(() => 'sentinel-serverTimestamp'),
   Timestamp: {
     fromDate: (date: Date) => ({ toDate: () => date }),
   },
@@ -142,6 +143,38 @@ describe('visit-invites-service - createVisitInviteForVisit (Firestore remoto)',
     expect(diffHours).toBeCloseTo(12, 0);
   });
 
+  it('admin ativo cria convite com papel admin sem erro de permissão', async () => {
+    const { getCurrentUserVisitMember } = await import('./visit-members-service');
+    vi.mocked(getCurrentUserVisitMember).mockResolvedValueOnce({
+      id: 'visit-1:user-123',
+      visitId: 'visit-1',
+      userId: 'user-123',
+      role: 'admin',
+      status: 'active',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const invite = await createVisitInviteForVisit({
+      visitId: 'visit-1',
+      role: 'admin',
+    });
+
+    expect(invite.role).toBe('admin');
+    expect(invite.createdByUserId).toBe('user-123');
+  });
+
+  it('persiste createdAt como serverTimestamp (ancoragem p/ regra createdAt == request.time)', async () => {
+    const { setDoc } = await import('firebase/firestore');
+
+    await createVisitInviteForVisit({ visitId: 'visit-1', role: 'editor' });
+
+    expect(setDoc).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ createdAt: 'sentinel-serverTimestamp' })
+    );
+  });
+
   it('lança erro quando usuário não é owner', async () => {
     const { getCurrentUserVisitMember } = await import('./visit-members-service');
     vi.mocked(getCurrentUserVisitMember).mockResolvedValueOnce({
@@ -156,7 +189,7 @@ describe('visit-invites-service - createVisitInviteForVisit (Firestore remoto)',
 
     await expect(
       createVisitInviteForVisit({ visitId: 'visit-1', role: 'editor' })
-    ).rejects.toThrow('Apenas o owner pode criar ou revogar convites.');
+    ).rejects.toThrow('Apenas o owner ou um admin podem criar ou revogar convites.');
   });
 
   it('lança erro quando Firestore não configurado', async () => {
@@ -212,6 +245,24 @@ describe('visit-invites-service - revokeVisitInvite (Firestore remoto)', () => {
     expect(result?.revokedAt).toBeDefined();
   });
 
+  it('admin ativo revoga convite sem erro de permissão', async () => {
+    const { getCurrentUserVisitMember } = await import('./visit-members-service');
+    vi.mocked(getCurrentUserVisitMember).mockResolvedValueOnce({
+      id: 'visit-1:user-123',
+      visitId: 'visit-1',
+      userId: 'user-123',
+      role: 'admin',
+      status: 'active',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const result = await revokeVisitInvite('invite-1', 'visit-1');
+
+    expect(result).toBeDefined();
+    expect(result?.revokedAt).toBeDefined();
+  });
+
   it('retorna undefined quando convite não existe', async () => {
     const { getDoc } = await import('firebase/firestore');
     vi.mocked(getDoc).mockResolvedValueOnce({
@@ -236,7 +287,7 @@ describe('visit-invites-service - revokeVisitInvite (Firestore remoto)', () => {
     });
 
     await expect(revokeVisitInvite('invite-1', 'visit-1')).rejects.toThrow(
-      'Apenas o owner pode criar ou revogar convites.'
+      'Apenas o owner ou um admin podem criar ou revogar convites.'
     );
   });
 

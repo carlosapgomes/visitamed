@@ -6,7 +6,7 @@
 /**
  * Papéis possíveis para um convite de visita
  */
-export type InviteRole = 'editor' | 'viewer';
+export type InviteRole = 'admin' | 'editor' | 'viewer';
 
 /**
  * Representa um convite para participar de uma visita colaborativa
