@@ -6,7 +6,7 @@
 /**
  * Papéis possíveis para um membro de visita
  */
-export type VisitRole = 'owner' | 'editor' | 'viewer';
+export type VisitRole = 'owner' | 'editor' | 'viewer' | 'admin';
 
 /**
  * Status do membership

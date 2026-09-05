@@ -14,7 +14,7 @@ import {
   getVisitAccessState,
 } from '@/services/auth/visit-permissions';
 
-function createMember(role: 'owner' | 'editor' | 'viewer', status: 'active' | 'removed' = 'active'): VisitMember {
+function createMember(role: 'owner' | 'editor' | 'viewer' | 'admin', status: 'active' | 'removed' = 'active'): VisitMember {
   return {
     id: `v1:u1`,
     visitId: 'v1',
@@ -56,6 +56,10 @@ describe('visit-permissions - canEditNote', () => {
     expect(canEditNote(createMember('editor'))).toBe(true);
   });
 
+  it('admin pode editar nota', () => {
+    expect(canEditNote(createMember('admin'))).toBe(true);
+  });
+
   it('viewer não pode editar nota', () => {
     expect(canEditNote(createMember('viewer'))).toBe(false);
   });
@@ -64,6 +68,7 @@ describe('visit-permissions - canEditNote', () => {
     expect(canEditNote(createMember('owner', 'removed'))).toBe(false);
     expect(canEditNote(createMember('editor', 'removed'))).toBe(false);
     expect(canEditNote(createMember('viewer', 'removed'))).toBe(false);
+    expect(canEditNote(createMember('admin', 'removed'))).toBe(false);
   });
 });
 
@@ -76,6 +81,10 @@ describe('visit-permissions - canDeleteNote', () => {
     expect(canDeleteNote(createMember('editor'))).toBe(true);
   });
 
+  it('admin pode deletar nota', () => {
+    expect(canDeleteNote(createMember('admin'))).toBe(true);
+  });
+
   it('viewer não pode deletar nota', () => {
     expect(canDeleteNote(createMember('viewer'))).toBe(false);
   });
@@ -84,12 +93,17 @@ describe('visit-permissions - canDeleteNote', () => {
     expect(canDeleteNote(createMember('owner', 'removed'))).toBe(false);
     expect(canDeleteNote(createMember('editor', 'removed'))).toBe(false);
     expect(canDeleteNote(createMember('viewer', 'removed'))).toBe(false);
+    expect(canDeleteNote(createMember('admin', 'removed'))).toBe(false);
   });
 });
 
 describe('visit-permissions - canManageMembers', () => {
   it('owner pode gerenciar membros', () => {
     expect(canManageMembers(createMember('owner'))).toBe(true);
+  });
+
+  it('admin pode gerenciar membros', () => {
+    expect(canManageMembers(createMember('admin'))).toBe(true);
   });
 
   it('editor não pode gerenciar membros', () => {
@@ -102,12 +116,17 @@ describe('visit-permissions - canManageMembers', () => {
 
   it('membro removido não pode gerenciar membros', () => {
     expect(canManageMembers(createMember('owner', 'removed'))).toBe(false);
+    expect(canManageMembers(createMember('admin', 'removed'))).toBe(false);
   });
 });
 
 describe('visit-permissions - canManageInvites', () => {
   it('owner pode gerenciar convites', () => {
     expect(canManageInvites(createMember('owner'))).toBe(true);
+  });
+
+  it('admin pode gerenciar convites', () => {
+    expect(canManageInvites(createMember('admin'))).toBe(true);
   });
 
   it('editor não pode gerenciar convites', () => {
@@ -120,6 +139,7 @@ describe('visit-permissions - canManageInvites', () => {
 
   it('membro removido não pode gerenciar convites', () => {
     expect(canManageInvites(createMember('owner', 'removed'))).toBe(false);
+    expect(canManageInvites(createMember('admin', 'removed'))).toBe(false);
   });
 });
 

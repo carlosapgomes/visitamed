@@ -32,6 +32,14 @@ describe('visit-member - createVisitMember', () => {
     expect(member.role).toBe('viewer');
     expect(member.id).toBe('visit-3:user-3');
   });
+
+  it('deve criar membro com role admin', () => {
+    const member = createVisitMember('visit-4', 'user-4', 'admin');
+
+    expect(member.role).toBe('admin');
+    expect(member.status).toBe('active');
+    expect(member.id).toBe('visit-4:user-4');
+  });
 });
 
 describe('visit-member - isActiveMember', () => {

@@ -33,7 +33,9 @@ export function canViewVisit(member: VisitMember): boolean {
  */
 export function canEditNote(member: VisitMember): boolean {
   if (!isActiveMember(member)) return false;
-  return member.role === 'owner' || member.role === 'editor';
+  return (
+    member.role === 'owner' || member.role === 'editor' || member.role === 'admin'
+  );
 }
 
 /**
@@ -41,7 +43,9 @@ export function canEditNote(member: VisitMember): boolean {
  */
 export function canDeleteNote(member: VisitMember): boolean {
   if (!isActiveMember(member)) return false;
-  return member.role === 'owner' || member.role === 'editor';
+  return (
+    member.role === 'owner' || member.role === 'editor' || member.role === 'admin'
+  );
 }
 
 /**
@@ -50,7 +54,7 @@ export function canDeleteNote(member: VisitMember): boolean {
  */
 export function canManageMembers(member: VisitMember): boolean {
   if (!isActiveMember(member)) return false;
-  return member.role === 'owner';
+  return member.role === 'owner' || member.role === 'admin';
 }
 
 /**
@@ -59,7 +63,7 @@ export function canManageMembers(member: VisitMember): boolean {
  */
 export function canManageInvites(member: VisitMember): boolean {
   if (!isActiveMember(member)) return false;
-  return member.role === 'owner';
+  return member.role === 'owner' || member.role === 'admin';
 }
 
 /**
