@@ -91,6 +91,45 @@ describe('generateMessage', () => {
       expect(result).toContain('- I04A | aguarda RX');
       expect(result).toContain('- I04B | preparar operatório');
     });
+
+    it('colapsa quebras de linha internas da nota em uma única linha', () => {
+      const scope: ExportScope = {
+        type: 'tag',
+        tag: 'UTI',
+        notes: [createTestNote({ bed: 'U02', note: 'discutir antibiótico\nreavaliar em 48h' })],
+      };
+
+      const result = generateMessage(scope);
+
+      expect(result).toContain('- U02 | discutir antibiótico reavaliar em 48h');
+    });
+
+    it('colapsa múltiplas quebras e espaços ao redor para um único espaço', () => {
+      const scope: ExportScope = {
+        type: 'tag',
+        tag: 'Intermediário',
+        notes: [createTestNote({ bed: 'I04A', note: 'aguarda RX\n\n  reavaliar à tarde' })],
+      };
+
+      const result = generateMessage(scope);
+
+      expect(result).toContain('- I04A | aguarda RX reavaliar à tarde');
+    });
+
+    it('separa itens consecutivos com linha em branco', () => {
+      const scope: ExportScope = {
+        type: 'tag',
+        tag: 'Intermediário',
+        notes: [
+          createTestNote({ bed: 'I04A', note: 'aguarda RX' }),
+          createTestNote({ bed: 'I04B', note: 'preparar operatório' }),
+        ],
+      };
+
+      const result = generateMessage(scope);
+
+      expect(result).toContain('- I04A | aguarda RX\n\n- I04B | preparar operatório');
+    });
   });
 
   describe('escopo date', () => {
@@ -174,6 +213,50 @@ describe('generateMessage', () => {
 
       expect(result).toContain('- I05A (AB) | avaliar cirurgia');
     });
-  });
 
+    it('separa itens consecutivos com linha em branco dentro da tag', () => {
+      const scope: ExportScope = {
+        type: 'date',
+        date: '2024-03-25',
+        tags: [
+          {
+            tag: 'Intermediário',
+            notes: [
+              createTestNote({ bed: 'I04A', note: 'aguarda RX' }),
+              createTestNote({ bed: 'I04B', note: 'preparar operatório' }),
+            ],
+          },
+        ],
+      };
+
+      const result = generateMessage(scope);
+
+      expect(result).toContain('- I04A | aguarda RX\n\n- I04B | preparar operatório');
+      expect(result.endsWith('- I04B | preparar operatório')).toBe(true);
+    });
+
+    it('separa grupos com duas linhas em branco', () => {
+      const scope: ExportScope = {
+        type: 'date',
+        date: '2024-03-25',
+        tags: [
+          {
+            tag: 'Intermediário',
+            notes: [
+              createTestNote({ bed: 'I04A', note: 'aguarda RX' }),
+              createTestNote({ bed: 'I04B', note: 'preparar operatório' }),
+            ],
+          },
+          {
+            tag: 'UTI',
+            notes: [createTestNote({ bed: 'U02', note: 'discutir antibiótico' })],
+          },
+        ],
+      };
+
+      const result = generateMessage(scope);
+
+      expect(result).toContain('- I04B | preparar operatório\n\n\n*UTI*');
+    });
+  });
 });

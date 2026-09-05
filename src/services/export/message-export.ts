@@ -50,12 +50,24 @@ export const DEFAULT_EXPORT_OPTIONS: ExportOptions = {
  *
  * *Tag*
  * - LEITO | nota
+ *
  * - LEITO (ref) | nota
+ *
+ *
+ * *Outra tag*
+ * - LEITO | nota
  *
  * Formato para tag:
  * *Tag*
  * - LEITO | nota
  *
+ * - LEITO (ref) | nota
+ *
+ * Itens consecutivos são separados por linha em branco (entre o último
+ * item de um grupo e o próximo cabeçalho de tag ficam duas linhas em
+ * branco). O conteúdo de cada nota é sempre uma única linha: quebras
+ * internas de linha são colapsadas em um único espaço. A mensagem não
+ * termina com linha em branco.
  */
 export function generateMessage(scope: ExportScope): string {
   if (scope.type === 'date') {
@@ -80,6 +92,7 @@ function generateDateMessage(scope: DateScope): string {
     lines.push(`*${tagGroup.tag}*`);
     for (const note of tagGroup.notes) {
       lines.push(formatNoteLine(note));
+      lines.push('');
     }
     lines.push('');
   }
@@ -98,26 +111,31 @@ function generateTagMessage(scope: TagScope): string {
 
   for (const note of scope.notes) {
     lines.push(formatNoteLine(note));
+    lines.push('');
   }
 
   return lines.join('\n').trim();
 }
 
-
 /**
  * Formata uma linha de nota no formato: - LEITO | nota
  * Inclui referência se existir: - LEITO (ref) | nota
+ * Quebras de linha internas da nota são colapsadas em um único espaço.
  */
 function formatNoteLine(note: Note): string {
   const bed = note.bed;
   const ref = note.reference ? ` (${note.reference})` : '';
-  return `- ${bed}${ref} | ${note.note}`;
+  const content = note.note.replace(/\s*[\r\n]+\s*/g, ' ').trim();
+  return `- ${bed}${ref} | ${content}`;
 }
 
 /**
  * Exporta notas para formato de texto
  */
-export function exportNotesAsText(notes: Note[], options: ExportOptions = DEFAULT_EXPORT_OPTIONS): string {
+export function exportNotesAsText(
+  notes: Note[],
+  options: ExportOptions = DEFAULT_EXPORT_OPTIONS
+): string {
   if (notes.length === 0) {
     return '';
   }
@@ -156,7 +174,10 @@ export function exportNotesAsText(notes: Note[], options: ExportOptions = DEFAUL
 /**
  * Exporta notas para formato Markdown
  */
-export function exportNotesAsMarkdown(notes: Note[], options: ExportOptions = DEFAULT_EXPORT_OPTIONS): string {
+export function exportNotesAsMarkdown(
+  notes: Note[],
+  options: ExportOptions = DEFAULT_EXPORT_OPTIONS
+): string {
   if (notes.length === 0) {
     return '';
   }
