@@ -42,6 +42,23 @@ describe('visit-member - createVisitMember', () => {
   });
 });
 
+describe('visit-member - displayName opcional (slice-005)', () => {
+  it('createVisitMember não define displayName (gravado no servidor no aceite)', () => {
+    const member = createVisitMember('visit-5', 'user-5', 'editor');
+
+    expect(member.displayName).toBeUndefined();
+  });
+
+  it('aceita membership com displayName opcional presente', () => {
+    const member: VisitMember = {
+      ...createVisitMember('visit-6', 'user-6', 'viewer'),
+      displayName: 'Ana Silva',
+    };
+
+    expect(member.displayName).toBe('Ana Silva');
+  });
+});
+
 describe('visit-member - isActiveMember', () => {
   it('deve retornar true para membro ativo', () => {
     const member: VisitMember = {

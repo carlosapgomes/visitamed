@@ -22,7 +22,7 @@ admin.initializeApp();
 
 const firestore = admin.firestore();
 
-type InviteRole = 'editor' | 'viewer';
+type InviteRole = 'admin' | 'editor' | 'viewer';
 type MemberStatus = 'active' | 'removed';
 
 // S11E: Rate limit config
@@ -95,9 +95,12 @@ interface InviteRecord {
   id: string;
   visitId: string;
   role: InviteRole;
+  createdAt: Date | null;
   expiresAt: Date | null;
   revokedAt: Date | null;
 }
+
+const MAX_DISPLAY_NAME_LENGTH = 100;
 
 function setCors(res: Response): void {
   res.set('Access-Control-Allow-Origin', '*');
@@ -153,8 +156,11 @@ function parseDate(value: unknown): Date | null {
     return null;
   }
 
-  if (value instanceof admin.firestore.Timestamp) {
-    return value.toDate();
+  // Duck-typing em vez de instanceof admin.firestore.Timestamp: dentro do
+  // functions emulator o firebase-tools faz stub do firebase-admin e a classe
+  // Timestamp fica indefinida; o formato dos valores retornados é o mesmo.
+  if (typeof value === 'object' && typeof (value as { toDate?: unknown }).toDate === 'function') {
+    return (value as { toDate(): Date }).toDate();
   }
 
   if (value instanceof Date) {
@@ -170,11 +176,28 @@ function parseDate(value: unknown): Date | null {
 }
 
 function parseInviteRole(value: unknown): InviteRole | null {
-  if (value === 'editor' || value === 'viewer') {
+  if (value === 'admin' || value === 'editor' || value === 'viewer') {
     return value;
   }
 
   return null;
+}
+
+/**
+ * Deriva o displayName do claim `name` do idToken: trim, vazio => ausente,
+ * máx. 100 chars. Retorna null quando o campo não deve ser gravado.
+ */
+function parseDisplayName(value: unknown): string | null {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  if (trimmed === '') {
+    return null;
+  }
+
+  return trimmed.slice(0, MAX_DISPLAY_NAME_LENGTH);
 }
 
 async function findInviteByTokenHash(token: string): Promise<InviteRecord | null> {
@@ -194,12 +217,16 @@ async function findInviteByTokenHash(token: string): Promise<InviteRecord | null
   const inviteDoc = snapshot.docs[0];
   const data = inviteDoc.data();
 
+  // R5: o visitId confiável é o do caminho do doc; campo gravado divergente
+  // do caminho => convite tratado como não encontrado.
   const visitIdFromPath = inviteDoc.ref.parent.parent?.id;
-  const visitId = typeof data['visitId'] === 'string' && data['visitId'].trim() !== ''
-    ? data['visitId']
-    : visitIdFromPath;
+  if (!visitIdFromPath) {
+    return null;
+  }
 
-  if (!visitId) {
+  const storedVisitId = data['visitId'];
+  const storedVisitIdIsValid = typeof storedVisitId === 'string' && storedVisitId.trim() !== '';
+  if (storedVisitIdIsValid && storedVisitId !== visitIdFromPath) {
     return null;
   }
 
@@ -210,14 +237,21 @@ async function findInviteByTokenHash(token: string): Promise<InviteRecord | null
 
   return {
     id: inviteDoc.id,
-    visitId,
+    visitId: visitIdFromPath,
     role,
+    createdAt: parseDate(data['createdAt']),
     expiresAt: parseDate(data['expiresAt']),
     revokedAt: parseDate(data['revokedAt']),
   };
 }
 
-async function acceptMembership(visitId: string, userId: string, role: InviteRole): Promise<AcceptInviteBusinessStatus> {
+async function acceptMembership(
+  visitId: string,
+  userId: string,
+  role: InviteRole,
+  inviteCreatedAt: Date | null,
+  displayName: string | null
+): Promise<AcceptInviteBusinessStatus> {
   const memberRef = firestore.collection('visits').doc(visitId).collection('members').doc(userId);
 
   return firestore.runTransaction(async (transaction) => {
@@ -232,13 +266,36 @@ async function acceptMembership(visitId: string, userId: string, role: InviteRol
       }
 
       if (status === 'removed') {
-        return 'access-revoked';
+        // R1/R2: reativação só se o convite foi criado após a remoção.
+        const removedAt = parseDate(memberData?.['removedAt']);
+        const reactivationAllowed =
+          inviteCreatedAt !== null &&
+          removedAt !== null &&
+          inviteCreatedAt.getTime() > removedAt.getTime();
+
+        if (!reactivationAllowed) {
+          return 'access-revoked';
+        }
+
+        const now = FieldValue.serverTimestamp();
+        const reactivationData: Record<string, unknown> = {
+          status: 'active',
+          role,
+          removedAt: FieldValue.delete(),
+          updatedAt: now,
+        };
+
+        if (displayName) {
+          reactivationData['displayName'] = displayName;
+        }
+
+        transaction.update(memberRef, reactivationData);
+        return 'accepted';
       }
     }
 
-    const now = admin.firestore.FieldValue.serverTimestamp();
-
-    transaction.set(memberRef, {
+    const now = FieldValue.serverTimestamp();
+    const newMemberData: Record<string, unknown> = {
       id: `${visitId}:${userId}`,
       visitId,
       userId,
@@ -246,7 +303,13 @@ async function acceptMembership(visitId: string, userId: string, role: InviteRol
       status: 'active',
       createdAt: now,
       updatedAt: now,
-    });
+    };
+
+    if (displayName) {
+      newMemberData['displayName'] = displayName;
+    }
+
+    transaction.set(memberRef, newMemberData);
 
     return 'accepted';
   });
@@ -324,8 +387,11 @@ export const acceptInviteEndpointV2 = onRequest({ region: 'southamerica-east1' }
       return;
     }
 
+    // R4: displayName capturado do claim `name` (trim, <=100, ausente => não grava)
+    const displayName = parseDisplayName(decodedToken['name']);
+
     // S11E: auditoria de aceite
-    const status = await acceptMembership(invite.visitId, decodedToken.uid, invite.role);
+    const status = await acceptMembership(invite.visitId, decodedToken.uid, invite.role, invite.createdAt, displayName);
 
     // Se aceite bem-sucedido, atualiza convite com auditoria
     if (status === 'accepted') {
@@ -338,7 +404,7 @@ export const acceptInviteEndpointV2 = onRequest({ region: 'southamerica-east1' }
 
           transaction.update(inviteRef, {
             acceptedCount: currentAcceptedCount + 1,
-            lastAcceptedAt: admin.firestore.FieldValue.serverTimestamp(),
+            lastAcceptedAt: FieldValue.serverTimestamp(),
             lastAcceptedByUserId: decodedToken.uid,
           });
         }

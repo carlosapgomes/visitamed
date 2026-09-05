@@ -40,6 +40,13 @@ export interface VisitMember {
 
   /** Data de remoção (se aplicável) */
   removedAt?: Date;
+
+  /**
+   * Nome de exibição capturado do claim `name` no aceite do convite (opcional).
+   * Gravado pelo endpoint de aceite (trim, máx. 100 chars); ausente quando o
+   * usuário não tem nome no perfil. Não é gravado pelo client.
+   */
+  displayName?: string;
 }
 
 /**

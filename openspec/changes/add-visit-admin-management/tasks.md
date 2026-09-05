@@ -29,8 +29,8 @@
 
 ## 6. Slice 5 — Re-entrada de removido + displayName (slices/slice-005-invite-readmission-display-name.md)
 
-- [ ] 6.1 Em `functions/src/index.ts` (`acceptInviteEndpointV2`): membership `removed` é reativado somente se `invite.createdAt > member.removedAt` (definir `status:'active'`, `role = invite.role`, limpar `removedAt`, atualizar `updatedAt`/`displayName`); caso contrário manter `access-revoked`; capturar `displayName` do claim `name` do token (trim, ≤100 chars) no aceite e na reativação; confiar no `visitId` do **caminho** do convite e rejeitar divergência com o campo gravado
-- [ ] 6.2 Verificação do slice: `cd functions && npm run build`; runbook R2 com os cenários: (a) removido + convite antigo → `access-revoked`; (b) removido + convite novo → reativado com papel do convite; (c) membro ativo → `already-member`; (d) `visitId` divergente → não encontrado
+- [x] 6.1 Em `functions/src/index.ts` (`acceptInviteEndpointV2`): membership `removed` é reativado somente se `invite.createdAt > member.removedAt` (definir `status:'active'`, `role = invite.role`, limpar `removedAt`, atualizar `updatedAt`/`displayName`); caso contrário manter `access-revoked`; capturar `displayName` do claim `name` do token (trim, ≤100 chars) no aceite e na reativação; confiar no `visitId` do **caminho** do convite e rejeitar divergência com o campo gravado
+- [x] 6.2 Verificação do slice: `cd functions && npm run build`; runbook R2 com os cenários: (a) removido + convite antigo → `access-revoked`; (b) removido + convite novo → reativado com papel do convite; (c) membro ativo → `already-member`; (d) `visitId` divergente → não encontrado
 
 ## 7. Slice 6 — Services client de gerência (slices/slice-006-client-member-admin-services.md)
 

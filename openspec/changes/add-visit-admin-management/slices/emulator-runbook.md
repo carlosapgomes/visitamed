@@ -100,6 +100,21 @@ updateMemberRoleEndpointV2
  R4 sem token                    401 unauthenticated
 ```
 
+Resultado da execução do slice-005 (functions emulator, projeto `demo-slice005`, readbacks via Admin SDK; invites semeados com `createdAt` explícito; usuários/tokens no Auth emulator — harness temporário, não commitado):
+
+```
+acceptInviteEndpointV2
+ R1 removido + convite novo (createdAt>removedAt, role editor)   200 {"status":"accepted","visitId":"v-r1"}      | doc: status=active, role=editor, removedAt=AUSENTE, updatedAt=SET, sem displayName (token sem name)
+ R2 removido + convite antigo (createdAt<=removedAt)             200 {"status":"access-revoked","visitId":"v-r2"} | doc: inalterado (status=removed, removedAt mantido)
+ R3 membro ativo                                                 200 {"status":"already-member","visitId":"v-r3"}    | doc: inalterado
+ R4 token name " Ana Silva "                                    200 {"status":"accepted","visitId":"v-r4"}      | doc: displayName="Ana Silva" (trim aplicado)
+ R4 token sem claim name                                         200 {"status":"accepted","visitId":"v-r4"}      | doc: SEM campo displayName
+ R4 claim name 120 chars                                         200 {"status":"accepted","visitId":"v-r4"}      | doc: displayName com 100 chars (truncado)
+ R5 campo visitId divergente do caminho                          200 {"status":"invite-not-found"}                        | convite tratado como não encontrado (sem visitId)
+ R6 convite role:'admin' (novo membro)                           200 {"status":"accepted","visitId":"v-r6"}      | doc: role=admin (sem invalid-invite-role)
+ R6 convite role:'admin' reativando removido                    200 {"status":"accepted","visitId":"v-r6b"}     | doc: role=admin, status=active, removedAt=AUSENTE
+```
+
 ### R3.1 — Roteamento (ambos os rewrites)
 
 Provar o roteamento de Hosting para TODAS as rotas novas (não só a primeira):
