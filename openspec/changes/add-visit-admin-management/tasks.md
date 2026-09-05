@@ -1,7 +1,7 @@
 ## 1. Preflight
 
-- [ ] 1.1 Confirmar working tree limpa, registrar `BASE_REF` (HEAD atual) e rodar a suíte completa uma única vez como baseline (`npm test`); registrar contagem/pass failures pré-existentes, se houver
-- [ ] 1.2 Confirmar disponibilidade do harness de verificação (Firebase CLI + emuladores; runbook `slices/emulator-runbook.md`) — sem ele, os cenários de rules/endpoints dos slices 002–005 ficam bloqueados e devem ser escalados, não simulados por inspeção
+- [x] 1.1 Confirmar working tree limpa, registrar `BASE_REF` (HEAD atual) e rodar a suíte completa uma única vez como baseline (`npm test`); registrar contagem/pass failures pré-existentes, se houver
+- [x] 1.2 Confirmar disponibilidade do harness de verificação (Firebase CLI + emuladores; runbook `slices/emulator-runbook.md`) — sem ele, os cenários de rules/endpoints dos slices 002–005 ficam bloqueados e devem ser escalados, não simulados por inspeção
 
 ## 2. Slice 1 — Papel admin no modelo e permissões client (slices/slice-001-admin-role-and-permissions.md)
 
@@ -52,6 +52,6 @@
 
 ## 10. Gate final
 
-- [ ] 10.1 Suíte completa e quality gate: `npm test`, `npm run lint`, `npm run build`, `cd functions && npm run build` — todos verdes
-- [ ] 10.2 Revisão consolidada do diff completo vs `BASE_REF` contra os requisitos da spec (`specs/visit-member-administration/spec.md`); sem regressões nos fluxos existentes (criar visita, convidar, aceitar, sair, excluir visita)
-- [ ] 10.3 Checklist de deploy para o operador: `firebase deploy --only firestore:rules,functions,hosting` e publicação do PWA (observar Migration Plan do design.md — rewrites do hosting são parte do deploy)
+- [x] 10.1 Suíte completa e quality gate: `npm test`, `npm run lint`, `npm run build`, `cd functions && npm run build` — todos verdes
+- [x] 10.2 Revisão consolidada do diff completo vs `BASE_REF` contra os requisitos da spec (`specs/visit-member-administration/spec.md`); sem regressões nos fluxos existentes (criar visita, convidar, aceitar, sair, excluir visita)
+- [x] 10.3 Checklist de deploy para o operador: `firebase deploy --only firestore:rules,functions,hosting` e publicação do PWA (observar Migration Plan do design.md — rewrites do hosting são parte do deploy)
