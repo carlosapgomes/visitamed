@@ -8,7 +8,15 @@ import { customElement, state } from 'lit/decorators.js';
 import { liveQuery, type Subscription } from 'dexie';
 import { navigate, getCurrentRoute } from '@/router/router';
 import { getAllNotes, deleteNotes } from '@/services/db/notes-service';
-import { getCurrentUserVisitMember } from '@/services/db/visit-members-service';
+import {
+  getCurrentUserVisitMember,
+  fetchVisitMembersFromRemote,
+  listVisitMembers,
+  removeVisitMemberAsAdmin,
+  updateVisitMemberRole,
+  type RemoveVisitMemberResult,
+  type UpdateVisitMemberRoleResult,
+} from '@/services/db/visit-members-service';
 import {
   getVisitById,
   isVisitExpiredLocally,
@@ -26,15 +34,21 @@ import {
   getVisitAccessState,
   type VisitAccessState,
 } from '@/services/auth/visit-permissions';
-import { getDashboardGroupActions } from '@/services/auth/dashboard-actions-policy';
+import {
+  getDashboardGroupActions,
+  canOpenParticipantsPanel,
+  getParticipantDisplayName,
+  getParticipantRoleLabel,
+  getParticipantRowActions,
+} from '@/services/auth/dashboard-actions-policy';
 import { groupNotesByTag } from '@/utils/group-notes-by-tag';
 import { getSyncStatus, subscribeToSync, type SyncStatus } from '@/services/sync/sync-service';
 import { generateMessage, copyToClipboard, type ExportScope } from '@/services/export/message-export';
 import type { Note } from '@/models/note';
 import type { Visit } from '@/models/visit';
-import type { VisitMember } from '@/models/visit-member';
+import type { VisitMember, VisitRole } from '@/models/visit-member';
 import type { InviteRole } from '@/models/visit-invite';
-import type { DashboardAction } from '@/services/auth/dashboard-actions-policy';
+import type { DashboardAction, ParticipantRowAction } from '@/services/auth/dashboard-actions-policy';
 import '../components/base/fab-button';
 import '../components/groups/tag-group';
 import '../components/feedback/action-sheet';
@@ -78,6 +92,15 @@ export class DashboardView extends LitElement {
   @state() private inviteLink = '';
   @state() private isGeneratingInvite = false;
   @state() private isDuplicatingVisit = false;
+  @state() private isParticipantsModalOpen = false;
+  @state() private participants: VisitMember[] = [];
+  @state() private isLoadingParticipants = false;
+  @state() private participantsFromCache = false;
+  @state() private participantsActionError = '';
+  @state() private isChangingParticipantRole = false;
+  @state() private removeParticipantTarget: VisitMember | null = null;
+  @state() private isRemovingParticipant = false;
+  @state() private removeParticipantError = '';
   @state() private syncStatus: SyncStatus = getSyncStatus();
   @state() private lastSyncErrorAt: Date | null = null;
 
@@ -353,9 +376,19 @@ export class DashboardView extends LitElement {
   }
 
   private canLeaveGroupVisit(): boolean {
-    return this.currentVisit?.mode === 'group'
-      && (this.member?.role === 'editor' || this.member?.role === 'viewer')
-      && this.accessState === 'active';
+    const role = this.member?.role;
+
+    return (
+      this.currentVisit?.mode === 'group'
+      && this.accessState === 'active'
+      && role !== undefined
+      && role !== 'owner'
+    );
+  }
+
+  private canOpenParticipantsPanel(): boolean {
+    if (!this.currentVisit) return false;
+    return canOpenParticipantsPanel(this.member, this.currentVisit.mode);
   }
 
   private canInvitePeople(): boolean {
@@ -520,6 +553,143 @@ export class DashboardView extends LitElement {
       this.showTemporaryToast('Link copiado');
     }
   };
+
+  private handleParticipantsClick = (): void => {
+    this.isParticipantsModalOpen = true;
+    void this.loadParticipants();
+  };
+
+  private handleParticipantsModalClose = (): void => {
+    if (this.isRemovingParticipant || this.isChangingParticipantRole) {
+      return;
+    }
+
+    this.isParticipantsModalOpen = false;
+    this.participantsActionError = '';
+  };
+
+  private async loadParticipants(): Promise<void> {
+    if (!this.visitId) return;
+
+    this.isLoadingParticipants = true;
+
+    try {
+      await this.refreshParticipantsList();
+    } finally {
+      this.isLoadingParticipants = false;
+    }
+  }
+
+  private async refreshParticipantsList(): Promise<void> {
+    if (!this.visitId) return;
+
+    try {
+      this.participants = await fetchVisitMembersFromRemote(this.visitId);
+      this.participantsFromCache = false;
+    } catch (error) {
+      // Erro de rede/Firestore: fallback para cache local com aviso
+      console.error('Erro ao buscar participantes remotos:', error);
+      this.participants = await listVisitMembers(this.visitId);
+      this.participantsFromCache = true;
+    }
+  }
+
+  private handleParticipantRoleChange = async (
+    target: VisitMember,
+    actionId: 'promote' | 'demote'
+  ): Promise<void> => {
+    if (!this.visitId || this.isChangingParticipantRole || this.isRemovingParticipant) {
+      return;
+    }
+
+    const newRole = actionId === 'promote' ? 'admin' : 'editor';
+    this.isChangingParticipantRole = true;
+    this.participantsActionError = '';
+
+    try {
+      const result = await updateVisitMemberRole(this.visitId, target.userId, newRole);
+
+      if (result.status === 'updated') {
+        await this.refreshParticipantsList();
+        this.showTemporaryToast(actionId === 'promote' ? 'Promovido a admin' : 'Rebaixado a editor');
+      } else {
+        this.participantsActionError = this.getParticipantManagementError(result.status);
+      }
+    } catch (error) {
+      console.error('Erro ao alterar papel do participante:', error);
+      this.participantsActionError = this.getParticipantNetworkError();
+    } finally {
+      this.isChangingParticipantRole = false;
+    }
+  };
+
+  private handleParticipantRemoveClick = (target: VisitMember): void => {
+    if (this.isChangingParticipantRole || this.isRemovingParticipant) {
+      return;
+    }
+
+    this.removeParticipantTarget = target;
+    this.removeParticipantError = '';
+  };
+
+  private handleRemoveParticipantCancel = (): void => {
+    if (this.isRemovingParticipant) {
+      return;
+    }
+
+    this.removeParticipantTarget = null;
+    this.removeParticipantError = '';
+  };
+
+  private handleRemoveParticipantConfirm = async (): Promise<void> => {
+    if (!this.visitId || !this.removeParticipantTarget || this.isRemovingParticipant) {
+      return;
+    }
+
+    const target = this.removeParticipantTarget;
+    this.isRemovingParticipant = true;
+    this.removeParticipantError = '';
+
+    try {
+      const result = await removeVisitMemberAsAdmin(this.visitId, target.userId);
+
+      if (result.status === 'removed') {
+        this.removeParticipantTarget = null;
+        await this.refreshParticipantsList();
+        this.showTemporaryToast('Participante removido');
+      } else {
+        this.removeParticipantError = this.getParticipantManagementError(result.status);
+      }
+    } catch (error) {
+      console.error('Erro ao remover participante:', error);
+      this.removeParticipantError = this.getParticipantNetworkError();
+    } finally {
+      this.isRemovingParticipant = false;
+    }
+  };
+
+  private getParticipantManagementError(
+    status: RemoveVisitMemberResult['status'] | UpdateVisitMemberRoleResult['status']
+  ): string {
+    switch (status) {
+      case 'forbidden':
+        return 'Você não tem permissão para executar esta ação.';
+      case 'target-not-found':
+        return 'Participante não encontrado. Atualize a lista e tente novamente.';
+      case 'cannot-remove-owner':
+      case 'cannot-update-owner':
+        return 'O dono da visita não pode ser alterado.';
+      case 'cannot-remove-self':
+      case 'cannot-update-self':
+        return 'Você não pode executar esta ação em você mesmo.';
+      default:
+        return '';
+    }
+  }
+
+  private getParticipantNetworkError(): string {
+    return 'Erro de conexão. Verifique sua internet e tente novamente.';
+  }
 
   private handleVisitDeleteClick = (): void => {
     this.visitDeleteError = '';
@@ -787,7 +957,7 @@ export class DashboardView extends LitElement {
             `
           : ''}
 
-        ${this.canCreatePrivateCopy() || this.canInvitePeople() || this.canDeletePrivateVisit() || this.canDeleteGroupVisitForAll() || this.canLeaveGroupVisit()
+        ${this.canCreatePrivateCopy() || this.canInvitePeople() || this.canDeletePrivateVisit() || this.canDeleteGroupVisitForAll() || this.canLeaveGroupVisit() || this.canOpenParticipantsPanel()
           ? html`
               <div class="mb-3 d-flex justify-content-end gap-2 flex-wrap">
                 ${this.canCreatePrivateCopy()
@@ -799,6 +969,13 @@ export class DashboardView extends LitElement {
                         @click=${this.handleDuplicateVisitClick}
                       >
                         ${this.isDuplicatingVisit ? 'Criando cópia...' : 'Criar cópia privada'}
+                      </button>
+                    `
+                  : ''}
+                ${this.canOpenParticipantsPanel()
+                  ? html`
+                      <button type="button" class="btn btn-outline-secondary" @click=${this.handleParticipantsClick}>
+                        Participantes
                       </button>
                     `
                   : ''}
@@ -921,6 +1098,8 @@ export class DashboardView extends LitElement {
       ${this.renderVisitDeleteConfirm()}
       ${this.renderLeaveVisitConfirm()}
       ${this.renderInviteModal()}
+      ${this.renderParticipantsModal()}
+      ${this.renderRemoveParticipantConfirm()}
     `;
   }
 
@@ -1104,6 +1283,185 @@ export class DashboardView extends LitElement {
                     </div>
                   `
                 : ''}
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  private getVisibleParticipants(): VisitMember[] {
+    const roleOrder: Record<VisitRole, number> = {
+      owner: 0,
+      admin: 1,
+      editor: 2,
+      viewer: 3,
+    };
+
+    return this.participants
+      .filter((member) => member.status === 'active')
+      .sort((a, b) => {
+        const roleDiff = roleOrder[a.role] - roleOrder[b.role];
+        if (roleDiff !== 0) return roleDiff;
+        return getParticipantDisplayName(a).localeCompare(getParticipantDisplayName(b), 'pt-BR');
+      });
+  }
+
+  private renderParticipantsModal() {
+    if (!this.isParticipantsModalOpen) return null;
+
+    const isBusy = this.isChangingParticipantRole || this.isRemovingParticipant;
+
+    return html`
+      <div class="modal-backdrop fade show"></div>
+      <div class="modal d-block" tabindex="-1" @click=${this.handleParticipantsModalClose}>
+        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable" @click=${(e: Event) => { e.stopPropagation(); }}>
+          <div class="modal-content border-0 shadow">
+            <div class="modal-body p-4 d-flex flex-column gap-3">
+              <div class="d-flex justify-content-between align-items-start gap-3">
+                <h3 class="h5 mb-0">Participantes</h3>
+                <button
+                  type="button"
+                  class="btn-close"
+                  aria-label="Fechar painel de participantes"
+                  ?disabled=${isBusy}
+                  @click=${this.handleParticipantsModalClose}
+                ></button>
+              </div>
+
+              ${this.participantsFromCache
+                ? html`
+                    <div class="alert alert-warning py-2 px-3 small mb-0" role="alert">
+                      Sem conexão — exibindo a lista salva neste dispositivo.
+                    </div>
+                  `
+                : ''}
+
+              ${this.participantsActionError
+                ? html`
+                    <div class="alert alert-danger py-2 px-3 small mb-0" role="alert">${this.participantsActionError}</div>
+                  `
+                : ''}
+
+              ${this.isLoadingParticipants
+                ? html`
+                    <div class="d-flex align-items-center gap-2 text-secondary py-3">
+                      <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+                      Carregando participantes...
+                    </div>
+                  `
+                : this.getVisibleParticipants().length === 0
+                  ? html`<p class="text-secondary mb-0 py-3">Nenhum participante encontrado.</p>`
+                  : html`
+                      <ul class="list-unstyled d-flex flex-column gap-2 mb-0">
+                        ${this.getVisibleParticipants().map((member) => this.renderParticipantRow(member))}
+                      </ul>
+                    `}
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  private renderParticipantRow(member: VisitMember) {
+    const currentMember = this.member;
+    const actions = currentMember ? getParticipantRowActions(member, currentMember) : [];
+    const isBusy = this.isChangingParticipantRole || this.isRemovingParticipant;
+    const displayName = getParticipantDisplayName(member);
+    const isSelf = currentMember?.userId === member.userId;
+
+    return html`
+      <li class="card border-0 shadow-sm">
+        <div class="card-body py-3 d-flex flex-column gap-2">
+          <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap">
+            <span class="fw-semibold text-break">
+              ${displayName}${isSelf ? html`<span class="text-secondary fw-normal"> (você)</span>` : ''}
+            </span>
+            <span class="badge text-bg-secondary">${getParticipantRoleLabel(member.role)}</span>
+          </div>
+          ${actions.length > 0
+            ? html`
+                <div class="d-flex flex-wrap gap-2">
+                  ${actions.map((action) => this.renderParticipantRowAction(member, action, isBusy))}
+                </div>
+              `
+            : ''}
+        </div>
+      </li>
+    `;
+  }
+
+  private renderParticipantRowAction(
+    member: VisitMember,
+    action: ParticipantRowAction,
+    isBusy: boolean
+  ) {
+    if (action.id === 'remove') {
+      return html`
+        <button
+          type="button"
+          class="btn btn-outline-danger"
+          ?disabled=${isBusy}
+          @click=${() => { this.handleParticipantRemoveClick(member); }}
+        >
+          Remover
+        </button>
+      `;
+    }
+
+    const roleActionId = action.id;
+    const actionLabel = roleActionId === 'promote' ? 'Promover a admin' : 'Rebaixar a editor';
+
+    return html`
+      <button
+        type="button"
+        class="btn btn-outline-primary"
+        ?disabled=${isBusy}
+        @click=${() => this.handleParticipantRoleChange(member, roleActionId)}
+      >
+        ${actionLabel}
+      </button>
+    `;
+  }
+
+  private renderRemoveParticipantConfirm() {
+    const target = this.removeParticipantTarget;
+    if (!target) return null;
+
+    const isProcessing = this.isRemovingParticipant;
+
+    return html`
+      <div class="modal-backdrop fade show"></div>
+      <div class="modal d-block" tabindex="-1" @click=${this.handleRemoveParticipantCancel}>
+        <div class="modal-dialog modal-dialog-centered modal-sm" @click=${(e: Event) => { e.stopPropagation(); }}>
+          <div class="modal-content border-0 shadow">
+            <div class="modal-body p-4">
+              <h3 class="h6 mb-2">Remover participante?</h3>
+              <p class="text-secondary mb-3">${getParticipantDisplayName(target)} perderá o acesso a esta visita imediatamente.</p>
+              ${this.removeParticipantError
+                ? html`<div class="alert alert-danger py-2 px-3 small" role="alert">${this.removeParticipantError}</div>`
+                : ''}
+              <div class="d-grid gap-2 d-sm-flex justify-content-end">
+                <button
+                  type="button"
+                  class="btn btn-outline-secondary"
+                  ?disabled=${isProcessing}
+                  @click=${this.handleRemoveParticipantCancel}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  class="btn btn-danger"
+                  ?disabled=${isProcessing}
+                  @click=${this.handleRemoveParticipantConfirm}
+                >
+                  ${isProcessing
+                    ? html`<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Removendo...`
+                    : 'Remover'}
+                </button>
+              </div>
             </div>
           </div>
         </div>

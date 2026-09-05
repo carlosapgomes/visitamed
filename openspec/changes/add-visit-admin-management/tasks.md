@@ -41,9 +41,9 @@
 
 ## 8. Slice 7 — Painel de participantes (slices/slice-007-participants-panel-ui.md)
 
-- [ ] 8.1 Em `src/views/dashboard-view.ts`: painel/modal de participantes visível a owner/admin (usa `canManageMembers`) listando membros com papel em badge (dono/admin/editor/viewer), nome (`displayName` com fallback uid truncado) e ações por linha: remover (exceto owner/self) e promover a admin / rebaixar a editor (exceto owner/self); estados de loading/erro/confirmção simples, mobile-first com design tokens; sem tocar em `components/`
-- [ ] 8.2 Em `src/views/dashboard-view.ts`: "Sair da visita" passa a aparecer para `admin` ativo (hoje só editor/viewer); endpoint leave já aceita
-- [ ] 8.3 Verificação do slice: `npx vitest run src/views` + `npx eslint src/views/dashboard-view.ts --max-warnings 0` + `npm run build` (typecheck strict); smoke manual no `npm run dev`: owner e admin veem painel, editor não vê, admin consegue sair da visita
+- [x] 8.1 Em `src/views/dashboard-view.ts`: painel/modal de participantes visível a owner/admin (usa `canManageMembers`) listando membros com papel em badge (dono/admin/editor/viewer), nome (`displayName` com fallback uid truncado) e ações por linha: remover (exceto owner/self) e promover a admin / rebaixar a editor (exceto owner/self); estados de loading/erro/confirmção simples, mobile-first com design tokens; sem tocar em `components/`
+- [x] 8.2 Em `src/views/dashboard-view.ts`: "Sair da visita" passa a aparecer para `admin` ativo (hoje só editor/viewer); endpoint leave já aceita
+- [ ] 8.3 Verificação do slice: PARCIAL — parte automatizada verde (vitest views+auth, eslint, npm run build); PENDENTE smoke humano no `npm run dev` (sem browser no ambiente de execução): owner e admin veem painel, editor não vê, admin consegue sair da visita
 
 ## 9. Slice 8 — Convites UI admin + re-aceite (slices/slice-008-invite-admin-ui-readmission.md)
 
