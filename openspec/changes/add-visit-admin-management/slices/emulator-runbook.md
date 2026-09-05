@@ -36,6 +36,10 @@ A matriz exata de cenários está em cada slice (002: invites; 003: members/note
 
 Emuladores necessários: `functions`, `auth`, `firestore` (o functions emulator resolve Auth/Firestore emulados automaticamente dentro do `emulators:exec/start`).
 
+> Nota operacional (descoberta no slice 004): o firebase-tools 15.x se recusa a iniciar `--only auth` se `firebase.json` não tiver o bloco `"emulators": { "auth": { "port": 9099 } }` (erro "Not starting the auth emulator" / "No emulators to start"). Para execuções locais do runbook, adicione esse bloco temporariamente ao `firebase.json` e NÃO o commite — o diff de produção deve conter apenas o que o slice pedir (ex.: rewrites no slice 004). Alternativa: usar um firebase.json local de teste.
+>
+> Nota operacional adicional: dentro do functions emulator, o firebase-tools faz stub do módulo `firebase-admin` devolvendo funções `bind()`-adas — por isso `admin.firestore.FieldValue` (e `admin.firestore.Timestamp`) fica `undefined` no emulador, e qualquer `admin.firestore.FieldValue.serverTimestamp()` lança TypeError → endpoint responde 500. Isso afeta igualmente endpoints pré-existentes (ex.: `leaveVisitEndpointV2`) e NÃO ocorre em produção. Código novo que precise de serverTimestamp/timestamps deve importar nomeado do subpacote: `import { FieldValue } from 'firebase-admin/firestore';` (semântica idêntica; não refatorar endpoints existentes).
+
 ```bash
 # terminal 1
 firebase emulators:start --only functions,auth,firestore,hosting
@@ -65,6 +69,49 @@ curl -s "http://127.0.0.1:5001/demo-<id>/southamerica-east1/<endpoint>" \
 
 4. **Asserts** — comparar status code + `error`/payload com a matriz do slice; ler docs pós-chamada (seed tooling) para confirmar efeitos (ex.: doc inalterado no `access-revoked`).
 
+### R2.1 — Matriz executada (slice-004, registrar resultados por linha)
+
+Registrar aqui, por execução, request→status/payload de cada linha. Resultado da execução do slice-004 (functions emulator, projeto `demo-visitamed`, readbacks via Admin SDK):
+
+```
+removeMemberEndpointV2
+ R1 owner->remove viewer         200 {"status":"removed"}  | doc: status=removed, removedAt=SET, updatedAt=SET
+ R2 outsider (sem membership)    403 {"error":"forbidden"}
+ R2 editor (role!=owner/admin)   403 {"error":"forbidden"}
+ R2 admin->owner (alvo owner)    403 {"error":"forbidden"}
+ R2 admin->self                  403 {"error":"forbidden"}
+ R2 alvo inexistente             404 {"error":"membership-not-found"}
+ R2 alvo já removido             404 {"error":"membership-not-found"}
+ R2 body inválido {}             400 {"error":"invalid-request"}
+ R2 sem targetUserId             400 {"error":"invalid-request"}
+ R2 sem token                    401 {"error":"unauthenticated"}
+ R2 OPTIONS                      204
+updateMemberRoleEndpointV2
+ R3 owner editor->viewer         200 {"status":"updated","role":"viewer"} | doc: role=viewer, updatedAt=SET
+ R4 outsider                     403 forbidden
+ R4 editor (self)                403 forbidden
+ R4 admin->owner                 403 forbidden
+ R4 admin->self                  403 forbidden
+ R4 alvo inexistente             404 membership-not-found
+ R4 alvo removido                404 membership-not-found
+ R4 role=owner                   400 invalid-request
+ R4 role=superadmin              400 invalid-request
+ R4 sem role                     400 invalid-request
+ R4 sem token                    401 unauthenticated
+```
+
+### R3.1 — Roteamento (ambos os rewrites)
+
+Provar o roteamento de Hosting para TODAS as rotas novas (não só a primeira):
+
+```bash
+curl -s http://127.0.0.1:5000/api/visits/members/remove -X POST -H 'Content-Type: application/json' -d '{}'
+curl -s http://127.0.0.1:5000/api/visits/members/role   -X POST -H 'Content-Type: application/json' -d '{}'
+# esperado em ambas: resposta da function (401 unauthenticated) — NÃO o index.html do PWA
+```
+
+Registro slice-004: ambas responderam `401 {"error":"unauthenticated"}` da function (não SPA).
+
 ## R3 — Roteamento de Hosting (slice 004)
 
 ```bash
@@ -72,6 +119,8 @@ curl -s "http://127.0.0.1:5001/demo-<id>/southamerica-east1/<endpoint>" \
 curl -s http://127.0.0.1:5000/api/visits/members/remove -X POST -H 'Content-Type: application/json' -d '{}'
 # esperado: resposta da function (401 unauthenticated) — NÃO o index.html do PWA
 ```
+
+> Nota operacional (slice-004): firebase-tools 15.x se recusa a iniciar `--only auth` sem `emulators.auth.port` em firebase.json — adicione temporariamente `{"emulators": {"auth": {"port": 9099}}}` localmente e NÃO commite. Além disso, o stub de firebase-admin do functions emulator (funções bound perdem statics) torna `admin.firestore.FieldValue` indefinido no emulador — em código novo use `import { FieldValue } from 'firebase-admin/firestore'` (endpoints legados não afetados em produção).
 
 ## Fallback declarado
 

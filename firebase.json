@@ -31,6 +31,20 @@
           "region": "southamerica-east1"
         }
       },
+      {
+        "source": "/api/visits/members/remove",
+        "function": {
+          "functionId": "removeMemberEndpointV2",
+          "region": "southamerica-east1"
+        }
+      },
+      {
+        "source": "/api/visits/members/role",
+        "function": {
+          "functionId": "updateMemberRoleEndpointV2",
+          "region": "southamerica-east1"
+        }
+      },
       { "source": "**", "destination": "/index.html" }
     ]
   }

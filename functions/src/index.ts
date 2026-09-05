@@ -9,6 +9,7 @@ import { onSchedule } from 'firebase-functions/v2/scheduler';
 import * as admin from 'firebase-admin';
 import { createHash } from 'crypto';
 import type { Request, Response } from 'express';
+import { FieldValue } from 'firebase-admin/firestore';
 
 /**
  * Gera hash SHA-256 hex de uma string
@@ -61,6 +62,33 @@ interface DeleteVisitRequest {
 interface DeleteVisitResponse {
   status: 'deleted';
   visitId: string;
+}
+
+type MemberRole = 'owner' | 'admin' | 'editor' | 'viewer';
+type AssignableMemberRole = 'admin' | 'editor' | 'viewer';
+
+interface RemoveMemberRequest {
+  visitId: string;
+  targetUserId: string;
+}
+
+interface RemoveMemberResponse {
+  status: 'removed';
+  visitId: string;
+  targetUserId: string;
+}
+
+interface UpdateMemberRoleRequest {
+  visitId: string;
+  targetUserId: string;
+  role: AssignableMemberRole;
+}
+
+interface UpdateMemberRoleResponse {
+  status: 'updated';
+  visitId: string;
+  targetUserId: string;
+  role: AssignableMemberRole;
 }
 
 interface InviteRecord {
@@ -504,6 +532,241 @@ export const deleteVisitEndpointV2 = onRequest({ region: 'southamerica-east1' },
     res.status(200).json(response);
   } catch (error) {
     console.error('Error deleting visit:', error);
+    setCors(res);
+    res.status(500).json({ error: 'internal-error' });
+  }
+});
+
+interface MemberRecord {
+  role: MemberRole;
+  status: MemberStatus;
+  userId: string;
+}
+
+async function getMemberRecord(visitId: string, userId: string): Promise<MemberRecord | null> {
+  const memberRef = firestore.collection('visits').doc(visitId).collection('members').doc(userId);
+  const memberSnap = await memberRef.get();
+
+  if (!memberSnap.exists) {
+    return null;
+  }
+
+  const memberData = memberSnap.data();
+  if (!memberData) {
+    return null;
+  }
+
+  const role = memberData['role'];
+  const status = memberData['status'];
+  const memberUserId = memberData['userId'];
+
+  if (
+    (role !== 'owner' && role !== 'admin' && role !== 'editor' && role !== 'viewer') ||
+    (status !== 'active' && status !== 'removed') ||
+    typeof memberUserId !== 'string' ||
+    memberUserId.trim() === ''
+  ) {
+    return null;
+  }
+
+  return { role, status, userId: memberUserId };
+}
+
+async function isActiveManagerMember(visitId: string, userId: string): Promise<boolean> {
+  const member = await getMemberRecord(visitId, userId);
+
+  if (!member || member.status !== 'active' || member.userId !== userId) {
+    return false;
+  }
+
+  return member.role === 'owner' || member.role === 'admin';
+}
+
+function parseAssignableMemberRole(value: unknown): AssignableMemberRole | null {
+  if (value === 'admin' || value === 'editor' || value === 'viewer') {
+    return value;
+  }
+
+  return null;
+}
+
+/**
+ * Endpoint autenticado para remover um membro de uma visita colaborativa
+ * Rota: POST /api/visits/members/remove
+ */
+export const removeMemberEndpointV2 = onRequest({ region: 'southamerica-east1' }, async (req: Request, res: Response) => {
+  if (req.method === 'OPTIONS') {
+    setCors(res);
+    res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.set('Access-Control-Allow-Headers', 'Authorization, Content-Type');
+    res.status(204).send();
+    return;
+  }
+
+  if (req.method !== 'POST') {
+    setCors(res);
+    res.status(405).json({ error: 'method-not-allowed' });
+    return;
+  }
+
+  const decodedToken = await authenticateRequest(req, res);
+  if (!decodedToken) {
+    return;
+  }
+
+  const body = req.body as RemoveMemberRequest | undefined;
+  if (
+    !body ||
+    typeof body.visitId !== 'string' ||
+    body.visitId.trim() === '' ||
+    typeof body.targetUserId !== 'string' ||
+    body.targetUserId.trim() === ''
+  ) {
+    setCors(res);
+    res.status(400).json({ error: 'invalid-request' });
+    return;
+  }
+
+  const visitId = body.visitId.trim();
+  const targetUserId = body.targetUserId.trim();
+
+  try {
+    const requesterIsManager = await isActiveManagerMember(visitId, decodedToken.uid);
+    if (!requesterIsManager) {
+      setCors(res);
+      res.status(403).json({ error: 'forbidden' });
+      return;
+    }
+
+    if (targetUserId === decodedToken.uid) {
+      setCors(res);
+      res.status(403).json({ error: 'forbidden' });
+      return;
+    }
+
+    const targetMember = await getMemberRecord(visitId, targetUserId);
+    if (!targetMember || targetMember.status !== 'active') {
+      setCors(res);
+      res.status(404).json({ error: 'membership-not-found' });
+      return;
+    }
+
+    if (targetMember.role === 'owner') {
+      setCors(res);
+      res.status(403).json({ error: 'forbidden' });
+      return;
+    }
+
+    const now = FieldValue.serverTimestamp();
+    const targetMemberRef = firestore.collection('visits').doc(visitId).collection('members').doc(targetUserId);
+    await targetMemberRef.update({
+      status: 'removed',
+      removedAt: now,
+      updatedAt: now,
+    });
+
+    const response: RemoveMemberResponse = {
+      status: 'removed',
+      visitId,
+      targetUserId,
+    };
+
+    setCors(res);
+    res.status(200).json(response);
+  } catch (error) {
+    console.error('Error removing member:', error);
+    setCors(res);
+    res.status(500).json({ error: 'internal-error' });
+  }
+});
+
+/**
+ * Endpoint autenticado para alterar o papel de um membro de uma visita colaborativa
+ * Rota: POST /api/visits/members/role
+ */
+export const updateMemberRoleEndpointV2 = onRequest({ region: 'southamerica-east1' }, async (req: Request, res: Response) => {
+  if (req.method === 'OPTIONS') {
+    setCors(res);
+    res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.set('Access-Control-Allow-Headers', 'Authorization, Content-Type');
+    res.status(204).send();
+    return;
+  }
+
+  if (req.method !== 'POST') {
+    setCors(res);
+    res.status(405).json({ error: 'method-not-allowed' });
+    return;
+  }
+
+  const decodedToken = await authenticateRequest(req, res);
+  if (!decodedToken) {
+    return;
+  }
+
+  const body = req.body as UpdateMemberRoleRequest | undefined;
+  const assignableRole = body ? parseAssignableMemberRole(body.role) : null;
+  if (
+    !body ||
+    typeof body.visitId !== 'string' ||
+    body.visitId.trim() === '' ||
+    typeof body.targetUserId !== 'string' ||
+    body.targetUserId.trim() === '' ||
+    !assignableRole
+  ) {
+    setCors(res);
+    res.status(400).json({ error: 'invalid-request' });
+    return;
+  }
+
+  const visitId = body.visitId.trim();
+  const targetUserId = body.targetUserId.trim();
+
+  try {
+    const requesterIsManager = await isActiveManagerMember(visitId, decodedToken.uid);
+    if (!requesterIsManager) {
+      setCors(res);
+      res.status(403).json({ error: 'forbidden' });
+      return;
+    }
+
+    if (targetUserId === decodedToken.uid) {
+      setCors(res);
+      res.status(403).json({ error: 'forbidden' });
+      return;
+    }
+
+    const targetMember = await getMemberRecord(visitId, targetUserId);
+    if (!targetMember || targetMember.status !== 'active') {
+      setCors(res);
+      res.status(404).json({ error: 'membership-not-found' });
+      return;
+    }
+
+    if (targetMember.role === 'owner') {
+      setCors(res);
+      res.status(403).json({ error: 'forbidden' });
+      return;
+    }
+
+    const now = FieldValue.serverTimestamp();
+    const targetMemberRef = firestore.collection('visits').doc(visitId).collection('members').doc(targetUserId);
+    await targetMemberRef.update({
+      role: assignableRole,
+      updatedAt: now,
+    });
+
+    const response: UpdateMemberRoleResponse = {
+      status: 'updated',
+      visitId,
+      targetUserId,
+      role: assignableRole,
+    };
+
+    setCors(res);
+    res.status(200).json(response);
+  } catch (error) {
+    console.error('Error updating member role:', error);
     setCors(res);
     res.status(500).json({ error: 'internal-error' });
   }

@@ -23,9 +23,9 @@
 
 ## 5. Slice 4 — Endpoints de gerência de membros (slices/slice-004-member-management-endpoints.md)
 
-- [ ] 5.1 Em `functions/src/index.ts`: criar `removeMemberEndpointV2` (`POST /api/visits/members/remove`) e `updateMemberRoleEndpointV2` (`POST /api/visits/members/role`) no padrão `leaveVisitEndpointV2` (Bearer idToken, CORS, região `southamerica-east1`); privilégio = owner/admin ativo; negar alvo owner, alvo == solicitante, papel destino fora de `{admin, editor, viewer}`; códigos de erro estruturados (`forbidden`, `membership-not-found`, `invalid-request`…)
-- [ ] 5.2 Em `firebase.json`: adicionar rewrites `/api/visits/members/remove` e `/api/visits/members/role` para as functions novas (região `southamerica-east1`), antes do fallback `**`
-- [ ] 5.3 Verificação do slice: `cd functions && npm run build` sem erros; runbook R2 (matriz de sucesso/negações por curl no emulador) + R3 (roteamento Hosting responde da function, não do SPA)
+- [x] 5.1 Em `functions/src/index.ts`: criar `removeMemberEndpointV2` (`POST /api/visits/members/remove`) e `updateMemberRoleEndpointV2` (`POST /api/visits/members/role`) no padrão `leaveVisitEndpointV2` (Bearer idToken, CORS, região `southamerica-east1`); privilégio = owner/admin ativo; negar alvo owner, alvo == solicitante, papel destino fora de `{admin, editor, viewer}`; códigos de erro estruturados (`forbidden`, `membership-not-found`, `invalid-request`…)
+- [x] 5.2 Em `firebase.json`: adicionar rewrites `/api/visits/members/remove` e `/api/visits/members/role` para as functions novas (região `southamerica-east1`), antes do fallback `**`
+- [x] 5.3 Verificação do slice: `cd functions && npm run build` sem erros; runbook R2 (matriz de sucesso/negações por curl no emulador) + R3 (roteamento Hosting responde da function, não do SPA)
 
 ## 6. Slice 5 — Re-entrada de removido + displayName (slices/slice-005-invite-readmission-display-name.md)
 
