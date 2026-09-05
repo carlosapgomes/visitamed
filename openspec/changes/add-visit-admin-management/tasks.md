@@ -18,8 +18,8 @@
 
 ## 4. Slice 3 — Rules de members para admins (slices/slice-003-rules-member-administration.md)
 
-- [ ] 4.1 Em `firestore.rules`: `canEditVisit` inclui `role == 'admin'`; `list` de `members` com fórmula OR (próprio membership OU owner/admin ativo); `update` com branches separadas — owner auto-reafirma o próprio doc apenas de forma invariante-preservante (push do sync depende disso); owner/admin alteram papel de outro membro só se alvo ativo, ≠ owner, ≠ requester, papel na whitelist e identidade (`id`/`visitId`/`userId`) preservada; `create` mantém apenas o bootstrap do owner (sem branch admin); `delete` passa a `if false` para clientes
-- [ ] 4.2 Verificação do slice: `firebase emulators:exec --only firestore "node scripts/rules-smoke.mjs"` verde (RED: abusos atuais permitidos, ex. owner altera próprio doc; GREEN: matriz completa de allows/negações) + `npx vitest run src/services/sync src/services/db` sem quebra (bootstrap, hardening e pull intactos)
+- [x] 4.1 Em `firestore.rules`: `canEditVisit` inclui `role == 'admin'`; `list` de `members` com fórmula OR (próprio membership OU owner/admin ativo); `update` com branches separadas — owner auto-reafirma o próprio doc apenas de forma invariante-preservante (push do sync depende disso); owner/admin alteram papel de outro membro só se alvo ativo, ≠ owner, ≠ requester, papel na whitelist e identidade (`id`/`visitId`/`userId`) preservada; `create` mantém apenas o bootstrap do owner (sem branch admin); `delete` passa a `if false` para clientes
+- [x] 4.2 Verificação do slice: `firebase emulators:exec --only firestore "node scripts/rules-smoke.mjs"` verde (RED: abusos atuais permitidos, ex. owner altera próprio doc; GREEN: matriz completa de allows/negações) + `npx vitest run src/services/sync src/services/db` sem quebra (bootstrap, hardening e pull intactos)
 
 ## 5. Slice 4 — Endpoints de gerência de membros (slices/slice-004-member-management-endpoints.md)
 

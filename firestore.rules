@@ -35,13 +35,12 @@ service cloud.firestore {
             || get(/databases/$(database)/documents/visits/$(visitId)/members/$(uid)).data.role == 'admin');
     }
 
-    // Pode editar visita (owner ou editor ativo)
+    // Pode editar notas da visita (owner, admin ou editor ativos)
     function canEditVisit(visitId, uid) {
       return isSignedIn()
         && exists(/databases/$(database)/documents/visits/$(visitId)/members/$(uid))
         && get(/databases/$(database)/documents/visits/$(visitId)/members/$(uid)).data.status == 'active'
-        && (get(/databases/$(database)/documents/visits/$(visitId)/members/$(uid)).data.role == 'owner'
-            || get(/databases/$(database)/documents/visits/$(visitId)/members/$(uid)).data.role == 'editor');
+        && (get(/databases/$(database)/documents/visits/$(visitId)/members/$(uid)).data.role in ['owner', 'admin', 'editor']);
     }
 
     // ===============================
@@ -64,26 +63,60 @@ service cloud.firestore {
         allow get: if isActiveMember(visitId, request.auth.uid)
           || (isSignedIn() && memberUserId == request.auth.uid);
 
-        // List/query (inclui collectionGroup):
-        // permite apenas memberships do próprio usuário autenticado
-        // (compatível com query por userId com/sem filtro de status)
+        // List/query da subcoleção: próprio membership OU requester é owner/admin
+        // ativo da visita. Membro comum continua precisando filtrar por userId
+        // (condição sobre resource); owner/admin listam sem filtro (condição só
+        // de request — avaliada uma vez por query). O collection group de members
+        // tem bloco próprio mais abaixo (somente próprio membership).
         allow list: if isSignedIn()
-          && resource.data.userId == request.auth.uid;
+          && (resource.data.userId == request.auth.uid
+              || isAdmin(visitId, request.auth.uid));
 
-        // Create: owner OU bootstrap estrito do owner inicial
-        allow create: if isOwner(visitId, request.auth.uid)
-          || (
-            request.auth.uid == get(/databases/$(database)/documents/visits/$(visitId)).data.userId
+        // Create: APENAS o bootstrap estrito do owner inicial. Membros nascem
+        // somente no bootstrap da visita ou no aceite de convite (endpoint via
+        // Admin SDK); sem branch admin/owner — criar membership direto concederia
+        // acesso sem convite e conflitaria com a regra de re-entrada (convite novo).
+        allow create: if request.auth.uid == get(/databases/$(database)/documents/visits/$(visitId)).data.userId
+          && memberUserId == request.auth.uid
+          && request.resource.data.userId == request.auth.uid
+          && request.resource.data.visitId == visitId
+          && request.resource.data.role == 'owner'
+          && request.resource.data.status == 'active'
+          && !exists(/databases/$(database)/documents/visits/$(visitId)/members/$(memberUserId));
+
+        // Update: branches separadas e excludentes.
+        // (a) Owner reafirma o PRÓPRIO membership apenas de forma invariante-
+        //     preservante (role owner/status active/identidade) — o push de
+        //     hardening do sync-service grava exatamente esse formato (setDoc merge).
+        // (b) Owner/admin gerenciam o papel de OUTRO membro ativo: alvo ≠ owner,
+        //     alvo ≠ requester, papel destino na whitelist, status e identidade
+        //     (id/visitId/userId) preservados. Removido não reativa por escrita
+        //     direta e nenhuma branch client mexe no doc do owner.
+        allow update: if (
+            isOwner(visitId, request.auth.uid)
             && memberUserId == request.auth.uid
-            && request.resource.data.userId == request.auth.uid
-            && request.resource.data.visitId == visitId
             && request.resource.data.role == 'owner'
             && request.resource.data.status == 'active'
-            && !exists(/databases/$(database)/documents/visits/$(visitId)/members/$(memberUserId))
+            && request.resource.data.id == resource.data.id
+            && request.resource.data.visitId == visitId
+            && request.resource.data.userId == memberUserId
+          )
+          || (
+            (isOwner(visitId, request.auth.uid) || isAdmin(visitId, request.auth.uid))
+            && memberUserId != request.auth.uid
+            && resource.data.role != 'owner'
+            && resource.data.status == 'active'
+            && request.resource.data.role in ['admin', 'editor', 'viewer']
+            && request.resource.data.status == resource.data.status
+            && request.resource.data.id == resource.data.id
+            && request.resource.data.visitId == visitId
+            && request.resource.data.userId == memberUserId
           );
 
-        // Update/delete: owner
-        allow update, delete: if isOwner(visitId, request.auth.uid);
+        // Delete: fechado para clientes. Docs de membros removidos precisam
+        // sobreviver (com removedAt) para a regra do convite-novo; limpeza real
+        // só via recursiveDelete do Admin SDK (exclusão da visita).
+        allow delete: if false;
       }
 
       // Subcoleção: notes
@@ -91,11 +124,11 @@ service cloud.firestore {
         // Read: membro ativo
         allow read: if isActiveMember(visitId, request.auth.uid);
 
-        // Create/update: owner ou editor + coerência do visitId
+        // Create/update: owner, admin ou editor + coerência do visitId
         allow create, update: if canEditVisit(visitId, request.auth.uid)
           && request.resource.data.visitId == visitId;
 
-        // Delete: owner ou editor
+        // Delete: owner, admin ou editor
         allow delete: if canEditVisit(visitId, request.auth.uid);
       }
 
