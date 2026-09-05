@@ -100,6 +100,7 @@ vi.mock('@/services/db/dexie-db', () => ({
 import * as syncService from './sync-service';
 import { type Note } from '@/models/note';
 import { type SyncQueueItem } from '@/models/sync-queue';
+import { type VisitMember } from '@/models/visit-member';
 import { getAuthState } from '@/services/auth/auth-service';
 import { getFirebaseFirestore } from '@/services/auth/firebase';
 import { db } from '@/services/db/dexie-db';
@@ -816,6 +817,55 @@ describe('sync-service - pullRemoteVisitMembershipsAndVisits', () => {
       })
     );
     expect(mockedTriggerCurrentUserTagStatsRebuild).toHaveBeenCalledTimes(1);
+  });
+
+  it('round-trip preserva role admin e displayName do membership remoto', async () => {
+    setupDefaults();
+
+    mockedGetDocs.mockResolvedValue({
+      empty: false,
+      docs: [
+        {
+          id: 'user-123',
+          data: () => ({
+            id: 'visit-1:user-123',
+            visitId: 'visit-1',
+            userId: 'user-123',
+            role: 'admin',
+            status: 'active',
+            createdAt: '2026-04-01T10:00:00.000Z',
+            updatedAt: '2026-04-01T10:00:00.000Z',
+            displayName: 'Dra. Ana',
+          }),
+        },
+      ],
+    } as Awaited<ReturnType<typeof getDocs>>);
+
+    mockedGetDoc.mockResolvedValue({
+      exists: () => true,
+      data: () => ({
+        id: 'visit-1',
+        userId: 'user-123',
+        name: 'Visita 01-04-2026 grupo',
+        date: '2026-04-01',
+        mode: 'group',
+        createdAt: '2026-04-01T10:00:00.000Z',
+      }),
+    } as Awaited<ReturnType<typeof getDoc>>);
+
+    await syncService.pullRemoteVisitMembershipsAndVisits();
+
+    expect(mockedDb.visitMembers.bulkPut).toHaveBeenCalledTimes(1);
+    const members = mockedDb.visitMembers.bulkPut.mock.calls[0][0] as Array<
+      VisitMember
+    >;
+    expect(members[0]).toEqual(
+      expect.objectContaining({
+        id: 'visit-1:user-123',
+        role: 'admin',
+        displayName: 'Dra. Ana',
+      })
+    );
   });
 
   it('aplica fallback de expiresAt quando remoto não possui o campo', async () => {

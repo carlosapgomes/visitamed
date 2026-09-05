@@ -34,10 +34,10 @@
 
 ## 7. Slice 6 — Services client de gerência (slices/slice-006-client-member-admin-services.md)
 
-- [ ] 7.1 RED: testes em `src/services/db/visit-members-service.test.ts` para (a) listagem remota de members da visita com cache Dexie, (b) remoção via endpoint com atualização local, (c) alteração de papel via endpoint com atualização local, incluindo caminhos de erro (`forbidden`, `target-not-found`); rodar focado e falhar
-- [ ] 7.2 GREEN: implementar em `src/services/db/visit-members-service.ts`: `fetchVisitMembersFromRemote(visitId)` (query na subcoleção + upsert local), `removeVisitMemberAsAdmin(visitId, targetUserId)` e `updateVisitMemberRole(visitId, targetUserId, newRole)` chamando os endpoints do slice 4 (substituindo o fluxo local-only de `removeVisitMemberAsOwner`, mantendo os status types existentes); mesmo comando focado passa
-- [ ] 7.3 Em `src/services/sync/sync-service.ts`: `FirestoreMemberData.role` inclui `'admin'` e `convertFirestoreMemberToLocal` copia `displayName` (round-trip da hidratação); teste de round-trip em `sync-service.test.ts` verde
-- [ ] 7.4 Verificação do slice: `npx vitest run src/services/db src/services/sync` + `npx eslint src/services/db/visit-members-service.ts src/services/sync/sync-service.ts --max-warnings 0`
+- [x] 7.1 RED: testes em `src/services/db/visit-members-service.test.ts` para (a) listagem remota de members da visita com cache Dexie, (b) remoção via endpoint com atualização local, (c) alteração de papel via endpoint com atualização local, incluindo caminhos de erro (`forbidden`, `target-not-found`); rodar focado e falhar
+- [x] 7.2 GREEN: implementar em `src/services/db/visit-members-service.ts`: `fetchVisitMembersFromRemote(visitId)` (query na subcoleção + upsert local), `removeVisitMemberAsAdmin(visitId, targetUserId)` e `updateVisitMemberRole(visitId, targetUserId, newRole)` chamando os endpoints do slice 4 (substituindo o fluxo local-only de `removeVisitMemberAsOwner`, mantendo os status types existentes); mesmo comando focado passa
+- [x] 7.3 Em `src/services/sync/sync-service.ts`: `FirestoreMemberData.role` inclui `'admin'` e `convertFirestoreMemberToLocal` copia `displayName` (round-trip da hidratação); teste de round-trip em `sync-service.test.ts` verde
+- [x] 7.4 Verificação do slice: `npx vitest run src/services/db src/services/sync` + `npx eslint src/services/db/visit-members-service.ts src/services/sync/sync-service.ts --max-warnings 0`
 
 ## 8. Slice 7 — Painel de participantes (slices/slice-007-participants-panel-ui.md)
 

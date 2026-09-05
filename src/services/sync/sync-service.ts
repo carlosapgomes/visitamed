@@ -1355,11 +1355,12 @@ interface FirestoreMemberData {
   id: string;
   visitId: string;
   userId: string;
-  role: 'owner' | 'editor' | 'viewer';
+  role: 'owner' | 'admin' | 'editor' | 'viewer';
   status: 'active' | 'removed';
   createdAt: unknown;
   updatedAt?: unknown;
   removedAt?: unknown;
+  displayName?: string;
 }
 
 interface FirestoreVisitData {
@@ -1472,6 +1473,7 @@ function convertFirestoreMemberToLocal(data: FirestoreMemberData): VisitMember {
     createdAt,
     updatedAt,
     ...(removedAt && { removedAt }),
+    ...(data.displayName && { displayName: data.displayName }),
   };
 }
 
