@@ -1,6 +1,7 @@
 {
   "projects": {
-    "default": "visitamed-36570"
+    "default": "visitamed-36570",
+    "staging": "visitamed-staging"
   },
   "targets": {
     "visitamed-36570": {
