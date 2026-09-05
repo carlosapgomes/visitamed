@@ -47,8 +47,8 @@
 
 ## 9. Slice 8 — Convites UI admin + re-aceite (slices/slice-008-invite-admin-ui-readmission.md)
 
-- [ ] 9.1 Em `src/views/dashboard-view.ts`: modal de convite oferece papel `admin` como opção (além de editor/viewer) para quem pode gerenciar convites; em `src/views/invite-accept-view.ts`: estados de re-aceite coerentes (convite novo após remoção → `accepted`; convite antigo → `access-revoked` existente)
-- [ ] 9.2 Verificação do slice: `npx vitest run src/views` + `npx eslint src/views --max-warnings 0` + `npm run build`; smoke manual: criar convite admin, aceitar com segunda conta, rebaixar/remover e re-aceitar via convite novo
+- [x] 9.1 Em `src/views/dashboard-view.ts`: modal de convite oferece papel `admin` como opção (além de editor/viewer) para quem pode gerenciar convites; em `src/views/invite-accept-view.ts`: estados de re-aceite coerentes (convite novo após remoção → `accepted`; convite antigo → `access-revoked` existente)
+- [ ] 9.2 Verificação do slice: PARCIAL — parte automatizada verde (vitest views+db, eslint, npm run build); PENDENTE smoke humano: criar convite admin, aceitar com segunda conta, rebaixar/remover e re-aceitar via convite novo
 
 ## 10. Gate final
 

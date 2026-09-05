@@ -153,7 +153,8 @@ export class InviteAcceptView extends LitElement {
       case 'invite-revoked':
         return 'Este convite foi revogado pelo criador.';
       case 'access-revoked':
-        return 'Seu acesso a esta visita foi removido.';
+        // Convite criado antes da remoção: não reativa o acesso — pedir um convite novo
+        return 'Seu acesso a esta visita foi revogado. Peça um novo convite.';
       default:
         return 'Ocorreu um erro ao processar o convite.';
     }

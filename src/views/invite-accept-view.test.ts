@@ -195,18 +195,52 @@ describe('invite-accept-view', () => {
     expect(finalUi).not.toContain('Ver visita');
   });
 
-  it('status não-sucesso mantém fluxo normal sem entrar em preparing', async () => {
-    acceptVisitInviteByTokenMock.mockResolvedValue({ status: 'invite-expired' });
+  it.each([
+    ['invite-not-found', 'Convite não encontrado', 'não existe ou já foi utilizado'],
+    ['invite-expired', 'Convite expirado', 'expirou e não pode mais ser usado'],
+    ['invite-revoked', 'Convite revogado', 'revogado pelo criador'],
+    // R3: convite antigo pós-remoção continua access-revoked, orientando a pedir convite novo
+    ['access-revoked', 'Acesso removido', 'Peça um novo convite'],
+  ] as const)(
+    'status %s (não-sucesso) segue o estado existente sem preparing nem sync',
+    async (status, title, fragment) => {
+      acceptVisitInviteByTokenMock.mockResolvedValue({ status });
+
+      const view = new InviteAcceptView();
+      await (view as unknown as { handleAcceptInvite: () => Promise<void> }).handleAcceptInvite();
+
+      expect((view as unknown as { isPreparingVisit: boolean }).isPreparingVisit).toBe(false);
+      expect(syncNowMock).not.toHaveBeenCalled();
+      expect(pullRemoteVisitMembershipsAndVisitsMock).not.toHaveBeenCalled();
+      expect(pullRemoteNotesMock).not.toHaveBeenCalled();
+
+      const finalUi = renderText(view);
+      expect(finalUi).toContain(title);
+      expect(finalUi).toContain(fragment);
+      expect(finalUi).not.toContain('Preparando sua visita');
+    }
+  );
+
+  // R2: o endpoint reativa removido com convite novo respondendo o MESMO formato de um
+  // aceite normal ({ status: 'accepted', visitId }) — regressão documentada: o caminho
+  // existente de accepted cobre a reativação, sem estado novo na view.
+  it('reativação pós-remoção (convite novo) responde accepted e usa o fluxo existente sem estado novo', async () => {
+    vi.useFakeTimers();
+
+    acceptVisitInviteByTokenMock.mockResolvedValue({ status: 'accepted', visitId: 'visit-1' });
+    getVisitByIdMock.mockResolvedValueOnce(undefined).mockResolvedValue({ id: 'visit-1' });
+    getCurrentUserVisitMemberMock.mockResolvedValueOnce(undefined).mockResolvedValue({ status: 'active' });
 
     const view = new InviteAcceptView();
-    await (view as unknown as { handleAcceptInvite: () => Promise<void> }).handleAcceptInvite();
+    const handlingPromise = (view as unknown as { handleAcceptInvite: () => Promise<void> }).handleAcceptInvite();
 
-    expect((view as unknown as { isPreparingVisit: boolean }).isPreparingVisit).toBe(false);
-    expect(syncNowMock).not.toHaveBeenCalled();
-    expect(pullRemoteVisitMembershipsAndVisitsMock).not.toHaveBeenCalled();
+    await Promise.resolve();
+    await vi.advanceTimersByTimeAsync(300);
+    await handlingPromise;
 
     const finalUi = renderText(view);
-    expect(finalUi).toContain('Convite expirado');
+    expect(finalUi).toContain('Convite aceito!');
+    expect(finalUi).toContain('Ver visita');
     expect(finalUi).not.toContain('Preparando sua visita');
   });
 });

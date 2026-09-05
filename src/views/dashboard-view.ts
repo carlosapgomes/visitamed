@@ -392,7 +392,12 @@ export class DashboardView extends LitElement {
   }
 
   private canInvitePeople(): boolean {
-    return Boolean(this.currentVisit && this.member?.role === 'owner' && this.accessState === 'active');
+    if (!this.currentVisit || this.accessState !== 'active' || !this.member) {
+      return false;
+    }
+
+    // Quem gerencia convites (owner/admin ativos) pode convidar, inclusive com papel admin
+    return this.member.role === 'owner' || this.member.role === 'admin';
   }
 
   private canCreatePrivateCopy(): boolean {
@@ -488,7 +493,7 @@ export class DashboardView extends LitElement {
 
   private handleInviteRoleChange = (event: Event): void => {
     const select = event.target as HTMLSelectElement;
-    if (select.value === 'editor' || select.value === 'viewer') {
+    if (select.value === 'admin' || select.value === 'editor' || select.value === 'viewer') {
       this.inviteRole = select.value;
     }
   };
@@ -501,7 +506,11 @@ export class DashboardView extends LitElement {
     this.isGeneratingInvite = true;
 
     try {
-      this.currentVisit = await ensureVisitIsGroup(this.visitId);
+      // ensureVisitIsGroup exige ownership (só owner converte private→group);
+      // admin ativo já participa de visita group, então a promoção é pulada para ele.
+      if (this.currentVisit?.mode !== 'group') {
+        this.currentVisit = await ensureVisitIsGroup(this.visitId);
+      }
       const invite = await createVisitInviteForVisit({
         visitId: this.visitId,
         role: this.inviteRole,
@@ -1246,10 +1255,12 @@ export class DashboardView extends LitElement {
                   .value=${this.inviteRole}
                   @change=${this.handleInviteRoleChange}
                 >
+                  <option value="admin">Admin</option>
                   <option value="editor">Editor</option>
                   <option value="viewer">Leitor</option>
                 </select>
-                <div class="small text-secondary mt-2">Editor: pode criar, editar e excluir notas.</div>
+                <div class="small text-secondary mt-2">Admin: gerencia participantes e convites.</div>
+                <div class="small text-secondary">Editor: pode criar, editar e excluir notas.</div>
                 <div class="small text-secondary">Leitor: pode apenas visualizar e exportar.</div>
               </div>
 
