@@ -282,7 +282,7 @@ describe('visit-members-service - removeVisitMemberAsAdmin', () => {
         headers: expect.objectContaining({
           'Content-Type': 'application/json',
           Authorization: 'Bearer id-token',
-        }),
+        }) as Record<string, string>,
         body: JSON.stringify({ visitId: VISIT_ID, targetUserId: 'target-user-id' }),
       })
     );
@@ -449,7 +449,7 @@ describe('visit-members-service - updateVisitMemberRole', () => {
         headers: expect.objectContaining({
           'Content-Type': 'application/json',
           Authorization: 'Bearer id-token',
-        }),
+        }) as Record<string, string>,
         body: JSON.stringify({ visitId: VISIT_ID, targetUserId: 'target-user-id', role: 'admin' }),
       })
     );

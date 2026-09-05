@@ -856,9 +856,7 @@ describe('sync-service - pullRemoteVisitMembershipsAndVisits', () => {
     await syncService.pullRemoteVisitMembershipsAndVisits();
 
     expect(mockedDb.visitMembers.bulkPut).toHaveBeenCalledTimes(1);
-    const members = mockedDb.visitMembers.bulkPut.mock.calls[0][0] as Array<
-      VisitMember
-    >;
+    const members = mockedDb.visitMembers.bulkPut.mock.calls[0][0] as VisitMember[];
     expect(members[0]).toEqual(
       expect.objectContaining({
         id: 'visit-1:user-123',
