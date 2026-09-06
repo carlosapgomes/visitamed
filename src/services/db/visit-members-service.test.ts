@@ -41,7 +41,9 @@ vi.mock('@/services/auth/firebase', () => ({
 // Mock das funções do Firestore
 vi.mock('firebase/firestore', () => ({
   collection: vi.fn(),
+  doc: vi.fn(),
   getDocs: vi.fn(),
+  updateDoc: vi.fn(),
 }));
 
 import * as membersService from './visit-members-service';
@@ -50,7 +52,7 @@ import { db } from './dexie-db';
 import { canManageMembers } from '@/services/auth/visit-permissions';
 import { getAuthState } from '@/services/auth/auth-service';
 import { getFirebaseFirestore } from '@/services/auth/firebase';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, doc, getDocs, updateDoc } from 'firebase/firestore';
 
 // Cast para os mocks para evitar erros de tipo
 const mockDb = db as unknown as {
@@ -66,7 +68,9 @@ const mockCanManageMembers = canManageMembers as unknown as ReturnType<typeof vi
 const mockedGetAuthState = getAuthState as unknown as ReturnType<typeof vi.fn>;
 const mockedGetFirebaseFirestore = getFirebaseFirestore as unknown as ReturnType<typeof vi.fn>;
 const mockedCollection = collection as unknown as ReturnType<typeof vi.fn>;
+const mockedDoc = doc as unknown as ReturnType<typeof vi.fn>;
 const mockedGetDocs = getDocs as unknown as ReturnType<typeof vi.fn>;
+const mockedUpdateDoc = updateDoc as unknown as ReturnType<typeof vi.fn>;
 
 const CURRENT_USER_ID = 'owner-user-id';
 const VISIT_ID = 'visit-1';
@@ -179,6 +183,162 @@ describe('visit-members-service - fetchVisitMembersFromRemote', () => {
       'network unavailable'
     );
     expect(mockDb.visitMembers.bulkPut).not.toHaveBeenCalled();
+  });
+
+  it('heal: grava displayName do perfil no doc remoto do usuário atual quando ausente', async () => {
+    mockedGetAuthState.mockReturnValue({
+      user: {
+        uid: CURRENT_USER_ID,
+        displayName: '  Ana Silva  ',
+      } as unknown as ReturnType<typeof getAuthState>['user'],
+      loading: false,
+      error: null,
+    });
+    mockedGetFirebaseFirestore.mockReturnValue({} as ReturnType<typeof getFirebaseFirestore>);
+    mockedCollection.mockReturnValue('members-collection');
+    mockedDoc.mockReturnValue('self-member-ref');
+    mockedGetDocs.mockResolvedValue({
+      empty: false,
+      docs: [
+        {
+          id: CURRENT_USER_ID,
+          data: () => ({
+            visitId: VISIT_ID,
+            userId: CURRENT_USER_ID,
+            role: 'owner',
+            status: 'active',
+            createdAt: '2026-04-01T10:00:00.000Z',
+            updatedAt: '2026-04-01T10:00:00.000Z',
+          }),
+        },
+      ],
+    } as Awaited<ReturnType<typeof getDocs>>);
+
+    const result = await membersService.fetchVisitMembersFromRemote(VISIT_ID);
+
+    expect(mockedDoc).toHaveBeenCalledWith(
+      expect.anything(),
+      'visits',
+      VISIT_ID,
+      'members',
+      CURRENT_USER_ID
+    );
+    expect(mockedUpdateDoc).toHaveBeenCalledTimes(1);
+    expect(mockedUpdateDoc).toHaveBeenCalledWith('self-member-ref', expect.anything());
+    const updateArg = (mockedUpdateDoc).mock.calls[0][1] as {
+      displayName: string;
+      updatedAt: unknown;
+    };
+    expect(updateArg.displayName).toBe('Ana Silva');
+    expect(updateArg.updatedAt).toBeInstanceOf(Date);
+    // Cache local e lista retornada com o nome
+    expect(result).toEqual([
+      expect.objectContaining({
+        userId: CURRENT_USER_ID,
+        role: 'owner',
+        displayName: 'Ana Silva',
+      }),
+    ]);
+    expect(mockDb.visitMembers.bulkPut).toHaveBeenCalledWith([
+      expect.objectContaining({
+        id: `${VISIT_ID}:${CURRENT_USER_ID}`,
+        displayName: 'Ana Silva',
+      }),
+    ]);
+  });
+
+  it('heal: não chama updateDoc quando o membership remoto do usuário atual já tem nome', async () => {
+    mockedGetAuthState.mockReturnValue({
+      user: {
+        uid: CURRENT_USER_ID,
+        displayName: 'Ana Silva',
+      } as unknown as ReturnType<typeof getAuthState>['user'],
+      loading: false,
+      error: null,
+    });
+    mockedGetFirebaseFirestore.mockReturnValue({} as ReturnType<typeof getFirebaseFirestore>);
+    mockedCollection.mockReturnValue('members-collection');
+    mockedGetDocs.mockResolvedValue({
+      empty: false,
+      docs: [
+        {
+          id: CURRENT_USER_ID,
+          data: () => ({
+            visitId: VISIT_ID,
+            userId: CURRENT_USER_ID,
+            role: 'owner',
+            status: 'active',
+            createdAt: '2026-04-01T10:00:00.000Z',
+            updatedAt: '2026-04-01T10:00:00.000Z',
+            displayName: 'Dra. Ana',
+          }),
+        },
+      ],
+    } as Awaited<ReturnType<typeof getDocs>>);
+
+    const result = await membersService.fetchVisitMembersFromRemote(VISIT_ID);
+
+    expect(mockedUpdateDoc).not.toHaveBeenCalled();
+    expect(mockedDoc).not.toHaveBeenCalled();
+    // Mantém o nome remoto (fonte de verdade) e não sobrescreve
+    expect(result[0]).toEqual(
+      expect.objectContaining({
+        userId: CURRENT_USER_ID,
+        displayName: 'Dra. Ana',
+      })
+    );
+    expect(mockDb.visitMembers.bulkPut).toHaveBeenCalledTimes(1);
+  });
+
+  it('heal: falha do updateDoc (rules) não propaga erro e retorna o dado remoto', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    try {
+      mockedGetAuthState.mockReturnValue({
+        user: {
+          uid: CURRENT_USER_ID,
+          displayName: 'Ana Silva',
+        } as unknown as ReturnType<typeof getAuthState>['user'],
+        loading: false,
+        error: null,
+      });
+      mockedGetFirebaseFirestore.mockReturnValue({} as ReturnType<typeof getFirebaseFirestore>);
+      mockedCollection.mockReturnValue('members-collection');
+      mockedDoc.mockReturnValue('self-member-ref');
+      mockedUpdateDoc.mockRejectedValue(new Error('permission-denied'));
+      mockedGetDocs.mockResolvedValue({
+        empty: false,
+        docs: [
+          {
+            id: CURRENT_USER_ID,
+            data: () => ({
+              visitId: VISIT_ID,
+              userId: CURRENT_USER_ID,
+              role: 'owner',
+              status: 'active',
+              createdAt: '2026-04-01T10:00:00.000Z',
+              updatedAt: '2026-04-01T10:00:00.000Z',
+            }),
+          },
+        ],
+      } as Awaited<ReturnType<typeof getDocs>>);
+
+      const result = await membersService.fetchVisitMembersFromRemote(VISIT_ID);
+
+      expect(mockedUpdateDoc).toHaveBeenCalledTimes(1);
+      // Sem propagação de erro: lista com o dado remoto (sem nome ainda)
+      expect(result[0]).toEqual(
+        expect.objectContaining({
+          userId: CURRENT_USER_ID,
+          role: 'owner',
+        })
+      );
+      expect(result[0]).not.toHaveProperty('displayName');
+      expect(mockDb.visitMembers.bulkPut).toHaveBeenCalledTimes(1);
+      expect(warnSpy).toHaveBeenCalled();
+    } finally {
+      warnSpy.mockRestore();
+    }
   });
 });
 
@@ -519,5 +679,45 @@ describe('visit-members-service - updateVisitMemberRole', () => {
     await expect(
       membersService.updateVisitMemberRole(VISIT_ID, 'target-user-id', 'admin')
     ).rejects.toThrow('Resposta inválida do servidor.');
+  });
+});
+
+describe('visit-members-service - createOwnerVisitMember', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('carimba displayName do perfil autenticado com trim', () => {
+    mockedGetAuthState.mockReturnValue({
+      user: {
+        uid: CURRENT_USER_ID,
+        displayName: '  Ana Silva  ',
+      } as unknown as ReturnType<typeof getAuthState>['user'],
+      loading: false,
+      error: null,
+    });
+
+    const ownerMember = membersService.createOwnerVisitMember(VISIT_ID, CURRENT_USER_ID);
+
+    expect(ownerMember.role).toBe('owner');
+    expect(ownerMember.status).toBe('active');
+    expect(ownerMember.displayName).toBe('Ana Silva');
+  });
+
+  it.each([null, '', '   '])('omite displayName quando o perfil não tem nome (%j)', (displayName) => {
+    mockedGetAuthState.mockReturnValue({
+      user: {
+        uid: CURRENT_USER_ID,
+        displayName,
+      } as unknown as ReturnType<typeof getAuthState>['user'],
+      loading: false,
+      error: null,
+    });
+
+    const ownerMember = membersService.createOwnerVisitMember(VISIT_ID, CURRENT_USER_ID);
+
+    expect(ownerMember.role).toBe('owner');
+    expect(Object.hasOwn(ownerMember, 'displayName')).toBe(false);
+    expect(ownerMember.displayName).toBeUndefined();
   });
 });

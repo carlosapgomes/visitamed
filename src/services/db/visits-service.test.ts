@@ -20,7 +20,7 @@ import type { VisitMember } from '@/models/visit-member';
 
 // Mocks para dependências externas
 vi.mock('@/services/auth/auth-service', () => ({
-  getAuthState: vi.fn(),
+  getAuthState: vi.fn(() => ({ user: null, loading: false, error: null })),
 }));
 
 vi.mock('./user-tag-stats-service', () => ({

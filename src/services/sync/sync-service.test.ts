@@ -1994,3 +1994,94 @@ describe('sync-service - serializeNoteForFirestore', () => {
     expect(Object.hasOwn(result, 'syncedAt')).toBe(false);
   });
 });
+
+describe('sync-service - syncNow push de membership (visit-member)', () => {
+  const mockedGetAuthState = vi.mocked(getAuthState);
+  const mockedGetFirebaseFirestore = vi.mocked(getFirebaseFirestore);
+  const mockedDoc = vi.mocked(doc);
+  const mockedSetDoc = vi.mocked(setDoc);
+
+  const mockedDb = db as unknown as {
+    syncQueue: {
+      where: ReturnType<typeof vi.fn>;
+      get: ReturnType<typeof vi.fn>;
+      delete: ReturnType<typeof vi.fn>;
+      count: ReturnType<typeof vi.fn>;
+    };
+  };
+
+  it('serializa displayName do membership no push quando presente no payload local', async () => {
+    vi.clearAllMocks();
+
+    mockedGetAuthState.mockReturnValue({
+      user: { uid: 'user-123' } as ReturnType<typeof getAuthState>['user'],
+      loading: false,
+      error: null,
+    });
+    mockedGetFirebaseFirestore.mockReturnValue({} as ReturnType<typeof getFirebaseFirestore>);
+    mockedDoc.mockReturnValue({} as ReturnType<typeof doc>);
+    mockedSetDoc.mockResolvedValue(undefined);
+
+    const memberQueueItem: SyncQueueItem = {
+      id: 'queue-member-displayname',
+      userId: 'user-123',
+      operation: 'create',
+      entityType: 'visit-member',
+      entityId: 'visit-1:user-123',
+      payload: JSON.stringify({
+        id: 'visit-1:user-123',
+        visitId: 'visit-1',
+        userId: 'user-123',
+        role: 'owner',
+        status: 'active',
+        createdAt: '2026-04-08T10:00:00.000Z',
+        updatedAt: '2026-04-08T10:00:00.000Z',
+        displayName: 'Ana Silva',
+      }),
+      createdAt: new Date('2026-04-08T12:00:00.000Z'),
+      retryCount: 0,
+    };
+
+    const queueItems = [memberQueueItem];
+    const existingQueueIds = new Set(queueItems.map((item) => item.id));
+
+    mockedDb.syncQueue.where.mockImplementation(() => ({
+      equals: vi.fn(() => ({
+        sortBy: vi.fn().mockResolvedValue(queueItems),
+      })),
+    }));
+
+    mockedDb.syncQueue.get.mockImplementation(((itemId: string) =>
+      queueItems.find((item) => item.id === itemId && existingQueueIds.has(item.id))
+    ) as never);
+
+    mockedDb.syncQueue.delete.mockImplementation((itemId: string) => {
+      existingQueueIds.delete(itemId);
+    });
+
+    mockedDb.syncQueue.count.mockResolvedValue(0);
+
+    await syncService.syncNow();
+
+    expect(mockedDoc).toHaveBeenCalledWith(
+      expect.anything(),
+      'visits',
+      'visit-1',
+      'members',
+      'user-123'
+    );
+    expect(mockedSetDoc).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        id: 'visit-1:user-123',
+        visitId: 'visit-1',
+        userId: 'user-123',
+        role: 'owner',
+        status: 'active',
+        displayName: 'Ana Silva',
+      }),
+      { merge: true }
+    );
+    expect(mockedDb.syncQueue.delete).toHaveBeenCalledWith('queue-member-displayname');
+  });
+});

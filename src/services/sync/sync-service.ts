@@ -616,6 +616,7 @@ async function processVisitMemberSyncItem(item: SyncQueueItem, firestore: Firest
       status: memberPayload.status,
       createdAt: serializeDateLikeToIso(memberPayload.createdAt),
       updatedAt: serializeDateLikeToIso(memberPayload.updatedAt),
+      ...(memberPayload.displayName && { displayName: memberPayload.displayName }),
     },
     { merge: true }
   );

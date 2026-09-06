@@ -13,7 +13,7 @@ import {
 } from '@/models/visit-member';
 import { getAuthState } from '@/services/auth/auth-service';
 import { getFirebaseFirestore } from '@/services/auth/firebase';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, doc, getDocs, updateDoc, type Firestore } from 'firebase/firestore';
 
 /**
  * Status retornado pela operação de remoção de membro
@@ -180,11 +180,67 @@ export async function listVisitMembers(visitId: string): Promise<VisitMember[]> 
 }
 
 /**
- * Cria o membership do owner ao criar uma visita privada
- * Usado em transação atômica com a criação da visita
+ * Cria o membership do owner ao criar uma visita privada.
+ * Usado em transação atômica com a criação da visita.
+ * Carimba o displayName do perfil autenticado (trim; ausente/vazio ⇒ omitido).
  */
 export function createOwnerVisitMember(visitId: string, userId: string): VisitMember {
-  return createVisitMember(visitId, userId, 'owner');
+  const member = createVisitMember(visitId, userId, 'owner');
+
+  const displayName = getAuthState().user?.displayName?.trim();
+
+  if (displayName) {
+    member.displayName = displayName;
+  }
+
+  return member;
+}
+
+/**
+ * Self-heal best-effort do displayName do usuário atual durante a listagem.
+ * Quando o membership do usuário atual está sem nome e o perfil autenticado
+ * tem nome, grava { displayName, updatedAt } no doc remoto do próprio membro.
+ * Owner pode auto-atualizar o próprio doc; não-owner é negado pelas rules
+ * (falha engolida — caso teórico, pois não-owners recebem nome no aceite).
+ */
+async function healCurrentUserDisplayName(
+  firestore: Firestore,
+  visitId: string,
+  members: VisitMember[]
+): Promise<void> {
+  const { user } = getAuthState();
+
+  if (!user) {
+    return;
+  }
+
+  const profileDisplayName = user.displayName?.trim();
+
+  if (!profileDisplayName) {
+    return;
+  }
+
+  const selfMember = members.find(
+    (member) => member.userId === user.uid && !member.displayName
+  );
+
+  if (!selfMember) {
+    return;
+  }
+
+  try {
+    await updateDoc(doc(firestore, 'visits', visitId, 'members', user.uid), {
+      displayName: profileDisplayName,
+      updatedAt: new Date(),
+    });
+
+    selfMember.displayName = profileDisplayName;
+  } catch (error) {
+    console.warn(
+      `[VisitaMed] Falha ao gravar displayName do membership de ${user.uid} na visita ${visitId} (self-heal best-effort):`,
+      error
+    );
+  }
 }
 
 /**
@@ -214,6 +270,8 @@ export async function fetchVisitMembersFromRemote(visitId: string): Promise<Visi
   );
 
   if (members.length > 0) {
+    await healCurrentUserDisplayName(firestore, visitId, members);
+
     await db.visitMembers.bulkPut(members);
   }
 
