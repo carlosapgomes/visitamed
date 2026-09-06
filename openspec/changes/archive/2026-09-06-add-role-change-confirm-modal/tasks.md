@@ -8,7 +8,7 @@
 ## 2. Gate
 
 - [x] 2.1 `npm run lint` + `npm test` + `npm run build` verdes; commit atômico do change
-- [ ] 2.2 Smoke humano (pendente, operador): (a) promover/rebaixar abrem modal com spinner "Promovendo..."/"Rebaixando..." no Confirmar; (b) sucesso fecha o modal + toast + lista atualizada; (c) erro aparece dentro do modal; (d) Cancelar (botão) durante processamento bloqueado; (e) cancelar normal e pelo backdrop fecham sem chamar o service; (f) remover segue inalterado
+- [x] 2.2 Smoke humano (validado pelo dono no staging em 2026-09-06): (a) promover/rebaixar abrem modal com spinner "Promovendo..."/"Rebaixando..." no Confirmar; (b) sucesso fecha o modal + toast + lista atualizada; (c) erro aparece dentro do modal; (d) Cancelar (botão) durante processamento bloqueado; (e) cancelar normal e pelo backdrop fecham sem chamar o service; (f) remover segue inalterado
 
 ## Notas
 

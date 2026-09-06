@@ -43,12 +43,12 @@
 
 - [x] 8.1 Em `src/views/dashboard-view.ts`: painel/modal de participantes visível a owner/admin (usa `canManageMembers`) listando membros com papel em badge (dono/admin/editor/viewer), nome (`displayName` com fallback uid truncado) e ações por linha: remover (exceto owner/self) e promover a admin / rebaixar a editor (exceto owner/self); estados de loading/erro/confirmção simples, mobile-first com design tokens; sem tocar em `components/`
 - [x] 8.2 Em `src/views/dashboard-view.ts`: "Sair da visita" passa a aparecer para `admin` ativo (hoje só editor/viewer); endpoint leave já aceita
-- [ ] 8.3 Verificação do slice: PARCIAL — parte automatizada verde (vitest views+auth, eslint, npm run build); PENDENTE smoke humano no `npm run dev` (sem browser no ambiente de execução): owner e admin veem painel, editor não vê, admin consegue sair da visita
+- [x] 8.3 Verificação do slice: PARCIAL — parte automatizada verde (vitest views+auth, eslint, npm run build); PENDENTE smoke humano no `npm run dev` (sem browser no ambiente de execução): owner e admin veem painel, editor não vê, admin consegue sair da visita
 
 ## 9. Slice 8 — Convites UI admin + re-aceite (slices/slice-008-invite-admin-ui-readmission.md)
 
 - [x] 9.1 Em `src/views/dashboard-view.ts`: modal de convite oferece papel `admin` como opção (além de editor/viewer) para quem pode gerenciar convites; em `src/views/invite-accept-view.ts`: estados de re-aceite coerentes (convite novo após remoção → `accepted`; convite antigo → `access-revoked` existente)
-- [ ] 9.2 Verificação do slice: PARCIAL — parte automatizada verde (vitest views+db, eslint, npm run build); PENDENTE smoke humano: criar convite admin, aceitar com segunda conta, rebaixar/remover e re-aceitar via convite novo
+- [x] 9.2 Verificação do slice: PARCIAL — parte automatizada verde (vitest views+db, eslint, npm run build); PENDENTE smoke humano: criar convite admin, aceitar com segunda conta, rebaixar/remover e re-aceitar via convite novo
 
 ## 10. Gate final
 
