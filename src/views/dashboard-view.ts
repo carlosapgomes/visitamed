@@ -62,6 +62,19 @@ type SelectedScope =
   | { type: 'visit'; notes: Note[] }
   | null;
 
+/** Configuração do modal genérico de confirmação de ação sobre participante */
+interface ParticipantConfirmModalConfig {
+  title: string;
+  description: string;
+  error: string;
+  isProcessing: boolean;
+  confirmButtonClass: string;
+  confirmLabel: string;
+  processingLabel: string;
+  onCancel: () => void;
+  onConfirm: () => void | Promise<void>;
+}
+
 @customElement('dashboard-view')
 export class DashboardView extends LitElement {
   @state() private visitId: string | null = null;
@@ -96,8 +109,9 @@ export class DashboardView extends LitElement {
   @state() private participants: VisitMember[] = [];
   @state() private isLoadingParticipants = false;
   @state() private participantsFromCache = false;
-  @state() private participantsActionError = '';
   @state() private isChangingParticipantRole = false;
+  @state() private roleChangeTarget: { member: VisitMember; action: 'promote' | 'demote' } | null = null;
+  @state() private roleChangeError = '';
   @state() private removeParticipantTarget: VisitMember | null = null;
   @state() private isRemovingParticipant = false;
   @state() private removeParticipantError = '';
@@ -574,7 +588,6 @@ export class DashboardView extends LitElement {
     }
 
     this.isParticipantsModalOpen = false;
-    this.participantsActionError = '';
   };
 
   private async loadParticipants(): Promise<void> {
@@ -603,30 +616,47 @@ export class DashboardView extends LitElement {
     }
   }
 
-  private handleParticipantRoleChange = async (
-    target: VisitMember,
-    actionId: 'promote' | 'demote'
-  ): Promise<void> => {
-    if (!this.visitId || this.isChangingParticipantRole || this.isRemovingParticipant) {
+  private handleParticipantRoleClick = (target: VisitMember, action: 'promote' | 'demote'): void => {
+    if (this.isChangingParticipantRole || this.isRemovingParticipant) {
       return;
     }
 
-    const newRole = actionId === 'promote' ? 'admin' : 'editor';
+    this.roleChangeTarget = { member: target, action };
+    this.roleChangeError = '';
+  };
+
+  private handleRoleChangeCancel = (): void => {
+    if (this.isChangingParticipantRole) {
+      return;
+    }
+
+    this.roleChangeTarget = null;
+    this.roleChangeError = '';
+  };
+
+  private handleParticipantRoleChange = async (): Promise<void> => {
+    if (!this.visitId || !this.roleChangeTarget || this.isChangingParticipantRole || this.isRemovingParticipant) {
+      return;
+    }
+
+    const target = this.roleChangeTarget;
+    const newRole = target.action === 'promote' ? 'admin' : 'editor';
     this.isChangingParticipantRole = true;
-    this.participantsActionError = '';
+    this.roleChangeError = '';
 
     try {
-      const result = await updateVisitMemberRole(this.visitId, target.userId, newRole);
+      const result = await updateVisitMemberRole(this.visitId, target.member.userId, newRole);
 
       if (result.status === 'updated') {
+        this.roleChangeTarget = null;
         await this.refreshParticipantsList();
-        this.showTemporaryToast(actionId === 'promote' ? 'Promovido a admin' : 'Rebaixado a editor');
+        this.showTemporaryToast(target.action === 'promote' ? 'Promovido a admin' : 'Rebaixado a editor');
       } else {
-        this.participantsActionError = this.getParticipantManagementError(result.status);
+        this.roleChangeError = this.getParticipantManagementError(result.status);
       }
     } catch (error) {
       console.error('Erro ao alterar papel do participante:', error);
-      this.participantsActionError = this.getParticipantNetworkError();
+      this.roleChangeError = this.getParticipantNetworkError();
     } finally {
       this.isChangingParticipantRole = false;
     }
@@ -1109,6 +1139,7 @@ export class DashboardView extends LitElement {
       ${this.renderInviteModal()}
       ${this.renderParticipantsModal()}
       ${this.renderRemoveParticipantConfirm()}
+      ${this.renderRoleChangeConfirm()}
     `;
   }
 
@@ -1348,12 +1379,6 @@ export class DashboardView extends LitElement {
                   `
                 : ''}
 
-              ${this.participantsActionError
-                ? html`
-                    <div class="alert alert-danger py-2 px-3 small mb-0" role="alert">${this.participantsActionError}</div>
-                  `
-                : ''}
-
               ${this.isLoadingParticipants
                 ? html`
                     <div class="d-flex align-items-center gap-2 text-secondary py-3">
@@ -1429,7 +1454,7 @@ export class DashboardView extends LitElement {
         type="button"
         class="btn btn-outline-primary"
         ?disabled=${isBusy}
-        @click=${() => this.handleParticipantRoleChange(member, roleActionId)}
+        @click=${() => { this.handleParticipantRoleClick(member, roleActionId); }}
       >
         ${actionLabel}
       </button>
@@ -1440,37 +1465,71 @@ export class DashboardView extends LitElement {
     const target = this.removeParticipantTarget;
     if (!target) return null;
 
-    const isProcessing = this.isRemovingParticipant;
+    return this.renderParticipantConfirmModal({
+      title: 'Remover participante?',
+      description: `${getParticipantDisplayName(target)} perderá o acesso a esta visita imediatamente.`,
+      error: this.removeParticipantError,
+      isProcessing: this.isRemovingParticipant,
+      confirmButtonClass: 'btn btn-danger',
+      confirmLabel: 'Remover',
+      processingLabel: 'Removendo...',
+      onCancel: this.handleRemoveParticipantCancel,
+      onConfirm: this.handleRemoveParticipantConfirm,
+    });
+  }
 
+  private renderRoleChangeConfirm() {
+    const target = this.roleChangeTarget;
+    if (!target) return null;
+
+    const isPromote = target.action === 'promote';
+    const displayName = getParticipantDisplayName(target.member);
+
+    return this.renderParticipantConfirmModal({
+      title: isPromote ? 'Promover a admin?' : 'Rebaixar a editor?',
+      description: isPromote
+        ? `${displayName} terá poderes de gerência de participantes e convites nesta visita.`
+        : `${displayName} perderá os poderes de gerência.`,
+      error: this.roleChangeError,
+      isProcessing: this.isChangingParticipantRole,
+      confirmButtonClass: 'btn btn-primary',
+      confirmLabel: isPromote ? 'Promover' : 'Rebaixar',
+      processingLabel: isPromote ? 'Promovendo...' : 'Rebaixando...',
+      onCancel: this.handleRoleChangeCancel,
+      onConfirm: this.handleParticipantRoleChange,
+    });
+  }
+
+  private renderParticipantConfirmModal(config: ParticipantConfirmModalConfig) {
     return html`
       <div class="modal-backdrop fade show"></div>
-      <div class="modal d-block" tabindex="-1" @click=${this.handleRemoveParticipantCancel}>
+      <div class="modal d-block" tabindex="-1" @click=${config.onCancel}>
         <div class="modal-dialog modal-dialog-centered modal-sm" @click=${(e: Event) => { e.stopPropagation(); }}>
           <div class="modal-content border-0 shadow">
             <div class="modal-body p-4">
-              <h3 class="h6 mb-2">Remover participante?</h3>
-              <p class="text-secondary mb-3">${getParticipantDisplayName(target)} perderá o acesso a esta visita imediatamente.</p>
-              ${this.removeParticipantError
-                ? html`<div class="alert alert-danger py-2 px-3 small" role="alert">${this.removeParticipantError}</div>`
+              <h3 class="h6 mb-2">${config.title}</h3>
+              <p class="text-secondary mb-3">${config.description}</p>
+              ${config.error
+                ? html`<div class="alert alert-danger py-2 px-3 small" role="alert">${config.error}</div>`
                 : ''}
               <div class="d-grid gap-2 d-sm-flex justify-content-end">
                 <button
                   type="button"
                   class="btn btn-outline-secondary"
-                  ?disabled=${isProcessing}
-                  @click=${this.handleRemoveParticipantCancel}
+                  ?disabled=${config.isProcessing}
+                  @click=${config.onCancel}
                 >
                   Cancelar
                 </button>
                 <button
                   type="button"
-                  class="btn btn-danger"
-                  ?disabled=${isProcessing}
-                  @click=${this.handleRemoveParticipantConfirm}
+                  class=${config.confirmButtonClass}
+                  ?disabled=${config.isProcessing}
+                  @click=${config.onConfirm}
                 >
-                  ${isProcessing
-                    ? html`<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Removendo...`
-                    : 'Remover'}
+                  ${config.isProcessing
+                    ? html`<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>${config.processingLabel}`
+                    : config.confirmLabel}
                 </button>
               </div>
             </div>
